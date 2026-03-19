@@ -44,26 +44,51 @@ export class GraphRenderer {
             });
         });
 
-        // VIRTUAL ROOT (Sanal Kök) / DUMMY ROOT mantığı:
-        // Tüm izole yapıları ve ebeveyni olmayan rootları tek bir görünmez köke bağlayarak DFS Cycle çökmesini önler.
-        const targetIds = new Set(links.map(l => l.target));
-        const rootNodes = nodes.filter(n => !targetIds.has(n.id));
-        
+        // --- VERİ TEMİZLİĞİ VE SANAL KÖK (DUMMY ROOT) GÜVENLİĞİ ---
+        const nodeIds = new Set(nodes.map(n => n.id));
         const DUMMY_ROOT_ID = 'virtual_dummy_root';
+        
         nodes.push({ id: DUMMY_ROOT_ID, type: 'dummy', data: {} });
+        nodeIds.add(DUMMY_ROOT_ID); // Validasyondan geçmesi için Set'e ekle
 
-        rootNodes.forEach(rn => {
-            links.push({ source: DUMMY_ROOT_ID, target: rn.id });
+        const parentMap = new Map();
+
+        nodes.forEach(node => {
+            if (node.id === DUMMY_ROOT_ID) {
+                // Dummy Root'un parentIds dizisi kesinlikle boş olmalı
+                parentMap.set(node.id, []);
+                return;
+            }
+
+            // Düğümün hedeflendiği (target) linklerin kaynaklarını (source) bul
+            let parents = links
+                .filter(l => l.target === node.id)
+                .map(l => l.source);
+
+            // Kural 1: KUSURSUZ VERİ TEMİZLİĞİ (Sanitization)
+            // Sadece fiziksel olarak dizide (nodes array) bulunan ID'lerin kalmasına izin ver.
+            // Hayalet (dangling/undefined/null) ID'leri filtrele.
+            parents = parents.filter(pId => pId && nodeIds.has(pId));
+
+            parentMap.set(node.id, parents);
+        });
+
+        // Kural 2 & 3: DUMMY ROOT Güvenliği ve SINGLE NODE Bypass
+        nodes.forEach(node => {
+            if (node.id === DUMMY_ROOT_ID) return;
+
+            const parents = parentMap.get(node.id);
+            // Eğer düğümün hiçbir fiziksel/gerçek ebeveyni kalmadıysa, SADECE o zaman sanal köke bağla
+            if (parents.length === 0) {
+                parents.push(DUMMY_ROOT_ID);
+            }
         });
 
         let dagInfo;
         try {
-            // namespace import kullanılarak d3dag.dagStratify()
             const builder = d3dag.dagStratify()
                 .id(d => d.id)
-                .parentIds(d => {
-                    return links.filter(l => l.target === d.id).map(l => l.source);
-                });
+                .parentIds(d => parentMap.get(d.id));
             
             dagInfo = builder(nodes);
         } catch (error) {
