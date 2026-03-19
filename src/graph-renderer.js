@@ -400,16 +400,16 @@ export class GraphRenderer {
             const layout = d3dag.sugiyama()
                 .nodeSize(n => {
                     if (!n || !n.data) return [0, 0];
-                    // Union: Katı sınır kutusu (2 eş + marjin = 650px)
-                    if (n.data.type === 'union') return [650, 400];
-                    if (n.data.type === 'dummy') return [50, 400];
+                    // Union: Katı sınır kutusu (2 eş + marjin = 350px)
+                    if (n.data.type === 'union') return [350, 300];
+                    if (n.data.type === 'dummy') return [50, 300];
                     // Person: Dar yatay, geniş dikey
-                    return [280, 400];
+                    return [220, 300];
                 })
-                .layering(d3dag.layeringSimplex())
+                .layering(d3dag.layeringLongestPath())
                 .decross(d3dag.decrossTwoLayer())
-                // coordGreedy: Alt-ağaçları izole tutar, kuzenler savrulmaz
-                .coord(d3dag.coordGreedy());
+                // coordCenter: Ağacı merkeze toplar, kuzenler savrulmaz
+                .coord(d3dag.coordCenter());
             layout(dagInfo);
         } catch(error) {
             console.error("DAG Layout Hatası:", error);
@@ -437,9 +437,9 @@ export class GraphRenderer {
             uNode.y = maxY;
         });
 
-        // 2b. X Kümeleme: Eşleri Union merkezinin ±150px'ine sabitle
-        // Union 650px katı sınır → eşler (300px toplam) sınır içinde kalır
-        const SPOUSE_HALF_GAP = 150;
+        // 2b. X Kümeleme: Eşleri Union merkezinin ±100px'ine sabitle
+        // Union 350px katı sınır → eşler (200px toplam) sınır içinde kalır
+        const SPOUSE_HALF_GAP = 100;
         data.unions.forEach(u => {
             const uNode = nodeById.get(`u_${u.id}`);
             if (!uNode) return;
@@ -586,19 +586,15 @@ export class GraphRenderer {
             .style("cursor", "pointer")
             .style("filter", "url(#card-shadow)");
 
-        // Vefat: siyah matem kurdelesi (sağ üst köşe üçgen) + hilal ikonu
+        // Vefat: İslami Hilal ve Yıldız Sembolü (☪)
         personGroups.filter(d => d.data.data.isDeceased)
-            .append("polygon")
-            .attr("points", `${cardWidth/2 - 24},${-cardHeight/2} ${cardWidth/2},${-cardHeight/2} ${cardWidth/2},${-cardHeight/2 + 24}`)
+            .append("text")
+            .attr("x", cardWidth/2 - 16)
+            .attr("y", -cardHeight/2 + 24)
+            .attr("text-anchor", "middle")
             .attr("fill", "#1e293b")
-            .attr("opacity", 0.9);
-        // Hilal (Crescent) SVG path
-        personGroups.filter(d => d.data.data.isDeceased)
-            .append("path")
-            .attr("d", "M0,-5 A5,5,0,1,1,0,5 A3.5,3.5,0,1,0,0,-5Z")
-            .attr("transform", `translate(${cardWidth/2 - 7},${-cardHeight/2 + 8}) scale(1)`)
-            .attr("fill", "white")
-            .attr("opacity", 0.95);
+            .attr("font-size", "22px")
+            .text("☪");
 
         personGroups.append("circle")
             .attr("cx", -cardWidth/2 + 14).attr("cy", -cardHeight/2 + 14).attr("r", 8)

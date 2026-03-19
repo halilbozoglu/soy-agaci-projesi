@@ -145,7 +145,26 @@ export class DataManager {
         this.executeTransaction(() => {
             const index = this.data.persons.findIndex(p => p.id === id);
             if(index !== -1) {
-                this.data.persons[index] = { ...this.data.persons[index], ...updates };
+                const oldPerson = this.data.persons[index];
+                
+                // Cinsiyet senkronizasyonu: Eğer "Kişiyi Düzenle" formundan cinsiyet değişirse ve yeni değer Erkek/Kadın ise
+                if (updates.cinsiyet && updates.cinsiyet !== oldPerson.cinsiyet && updates.cinsiyet !== 'Belirtilmemiş') {
+                    const newOpposite = updates.cinsiyet === 'Erkek' ? 'Kadın' : 'Erkek';
+                    
+                    const unions = this.getUnionsForPerson(id);
+                    unions.forEach(u => {
+                        u.partnerIds.forEach(pid => {
+                            if (pid !== id) {
+                                const partnerIndex = this.data.persons.findIndex(p => p.id === pid);
+                                if (partnerIndex !== -1) {
+                                    this.data.persons[partnerIndex].cinsiyet = newOpposite;
+                                }
+                            }
+                        });
+                    });
+                }
+                
+                this.data.persons[index] = { ...oldPerson, ...updates };
             } else {
                 throw new Error("Kişi bulunamadı.");
             }
