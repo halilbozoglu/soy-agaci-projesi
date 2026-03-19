@@ -88,16 +88,28 @@ export class DataManager {
     
     deletePerson(id) {
         this.executeTransaction(() => {
+            // 1. Kişiyi persons listesinden sil
             this.data.persons = this.data.persons.filter(p => p.id !== id);
             
-            // Kişiyi tüm birlikteliklerden (unions) temizle
+            // 2. Kişiyi tüm birlikteliklerden (unions) temizle
             this.data.unions.forEach(u => {
                 u.partnerIds = u.partnerIds.filter(pid => pid !== id);
                 u.childrenIds = u.childrenIds.filter(cid => cid !== id);
             });
             
-            // Boş kalan birliktelikleri (kimse kalmadıysa) temizle
-            this.data.unions = this.data.unions.filter(u => u.partnerIds.length > 0 || u.childrenIds.length > 0);
+            // 3. UNION GARBAGE COLLECTION:
+            // Evlilik/bağlamsal anlamını yitirmiş union'ları tamamen sil:
+            // - Hiç partneri ve hiç çocuğu kalmamış (tamamen boş)
+            // - Sadece 1 partner kalıp 0 çocuğu olan (yetim evlilik)
+            this.data.unions = this.data.unions.filter(u => {
+                const totalMembers = u.partnerIds.length + u.childrenIds.length;
+                // Tamamen boş → sil
+                if (totalMembers === 0) return false;
+                // Tek partner, sıfır çocuk → anlamsız union → sil
+                if (u.partnerIds.length <= 1 && u.childrenIds.length === 0) return false;
+                // Aksi halde koru (en az 2 partner, veya çocuk var)
+                return true;
+            });
         });
     }
 

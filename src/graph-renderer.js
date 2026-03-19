@@ -133,7 +133,11 @@ export class GraphRenderer {
                 if (item.action === 'startLinking') {
                     this.enterLinkingMode(personData);
                 } else if (this.callbacks[item.action]) {
-                    this.callbacks[item.action](personData);
+                    // Popover pozisyonu için event referansını controller'a aktar
+                    if (this.callbacks._setLastEvent) {
+                        this.callbacks._setLastEvent(event);
+                    }
+                    this.callbacks[item.action](personData, event);
                 }
             });
             menu.appendChild(btn);
