@@ -24,7 +24,6 @@ export class DataManager {
     }
 
     pushHistory() {
-        // Derin kopya (Deep Copy) ile anlık durum (snapshot) al
         const snapshot = JSON.stringify(this.data);
         this.historyStack.push(JSON.parse(snapshot));
         if (this.historyStack.length > MAX_HISTORY) {
@@ -42,13 +41,11 @@ export class DataManager {
     }
 
     clearAllData() {
-        // Native confirm onayı UI arayüzünde halledilecek, burada sadece sıfırlama yapılıyor
         localStorage.clear();
         this.data = { persons: [], unions: [] };
         this.historyStack = [];
     }
 
-    // Atomik işlem sarmalayıcı (wrapper)
     executeTransaction(operation) {
         this.pushHistory();
         try {
@@ -88,26 +85,16 @@ export class DataManager {
     
     deletePerson(id) {
         this.executeTransaction(() => {
-            // 1. Kişiyi persons listesinden sil
             this.data.persons = this.data.persons.filter(p => p.id !== id);
-            
-            // 2. Kişiyi tüm birlikteliklerden (unions) temizle
             this.data.unions.forEach(u => {
                 u.partnerIds = u.partnerIds.filter(pid => pid !== id);
                 u.childrenIds = u.childrenIds.filter(cid => cid !== id);
             });
-            
-            // 3. UNION GARBAGE COLLECTION:
-            // Evlilik/bağlamsal anlamını yitirmiş union'ları tamamen sil:
-            // - Hiç partneri ve hiç çocuğu kalmamış (tamamen boş)
-            // - Sadece 1 partner kalıp 0 çocuğu olan (yetim evlilik)
+            // Union Garbage Collection
             this.data.unions = this.data.unions.filter(u => {
                 const totalMembers = u.partnerIds.length + u.childrenIds.length;
-                // Tamamen boş → sil
                 if (totalMembers === 0) return false;
-                // Tek partner, sıfır çocuk → anlamsız union → sil
                 if (u.partnerIds.length <= 1 && u.childrenIds.length === 0) return false;
-                // Aksi halde koru (en az 2 partner, veya çocuk var)
                 return true;
             });
         });
@@ -125,5 +112,49 @@ export class DataManager {
     
     getUnion(id) {
         return this.data.unions.find(u => u.id === id);
+    }
+
+    // Kişinin bağlı olduğu tüm Union'ları döndür (partner olarak)
+    getUnionsForPerson(personId) {
+        return this.data.unions.filter(u => u.partnerIds.includes(personId));
+    }
+
+    // Kişinin ebeveyn Union'ını bul (çocuk olarak bağlı olduğu)
+    getParentUnion(personId) {
+        return this.data.unions.find(u => u.childrenIds.includes(personId));
+    }
+
+    // --- CYCLE DETECTION (DFS tabanlı) ---
+    // sourceId'den targetId'ye soy çizgisinde bir yol var mı kontrol eder.
+    // sourceId'nin soyundan targetId çıkıyorsa, onları evlendirmek döngü yaratır.
+    hasCycle(sourceId, targetId) {
+        // sourceId'den aşağı doğru DFS yaparak targetId'ye ulaşılabilir mi bak
+        const visited = new Set();
+        const stack = [sourceId];
+
+        while (stack.length > 0) {
+            const current = stack.pop();
+            if (current === targetId) return true;
+            if (visited.has(current)) continue;
+            visited.add(current);
+
+            // Bu kişinin partner olduğu tüm union'ları bul
+            this.data.unions.forEach(u => {
+                if (u.partnerIds.includes(current)) {
+                    // Bu union'un çocuklarını stack'e ekle
+                    u.childrenIds.forEach(childId => {
+                        if (!visited.has(childId)) stack.push(childId);
+                    });
+                }
+            });
+        }
+        return false;
+    }
+
+    // İki kişi arasında evlilik döngü yaratır mı?
+    wouldCreateCycle(personId1, personId2) {
+        // personId1 -> personId2'nin soyundan mı geliyor?
+        // VEYA personId2 -> personId1'in soyundan mı geliyor?
+        return this.hasCycle(personId1, personId2) || this.hasCycle(personId2, personId1);
     }
 }

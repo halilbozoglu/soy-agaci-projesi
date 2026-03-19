@@ -203,6 +203,11 @@ aside::-webkit-scrollbar-thumb {
   border-color: rgba(99,102,241,0.4);
   box-shadow: 0 0 20px rgba(99,102,241,0.2), 0 8px 32px rgba(0,0,0,0.4);
 }
+.toast-error {
+  border-color: rgba(239,68,68,0.5);
+  background: rgba(127,29,29,0.92);
+  box-shadow: 0 0 20px rgba(239,68,68,0.3), 0 8px 32px rgba(0,0,0,0.4);
+}
 .toast-close {
   background: none;
   border: none;
@@ -268,6 +273,12 @@ aside::-webkit-scrollbar-thumb {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+.popover-label {
+  font-size: 11px;
+  color: #94a3b8;
+  font-weight: 600;
+  letter-spacing: 0.03em;
 }
 .popover-actions {
   display: flex;

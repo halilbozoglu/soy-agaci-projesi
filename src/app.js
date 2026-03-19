@@ -6,13 +6,14 @@ export class AppController {
     constructor() {
         this.dataManager = new DataManager();
         this.currentBase64Image = null;
-        this.editingPersonId = null; // Düzenleme modu: aktif kişi ID'si
+        this.editingPersonId = null;
 
         // --- Context Menu Callback'leri ---
         this.renderer = new GraphRenderer('graph-container', {
             edit: (person) => this.enterEditMode(person),
             addParent: (person, ev) => this.addParentFor(person, ev),
             addChild: (person, ev) => this.addChildFor(person, ev),
+            addSibling: (person, ev) => this.addSiblingFor(person, ev),
             addPartner: (person, ev) => this.addPartnerFor(person, ev),
             linkTwoPersons: (p1, p2) => this.linkTwoPersons(p1, p2),
             delete: (person) => this.deletePersonWithConfirm(person),
@@ -42,34 +43,8 @@ export class AppController {
         });
     }
 
-    resolvePersonId(inputValue) {
-        if (!inputValue || inputValue.trim() === "") return null;
-        
-        const match = inputValue.match(/\((.*?)\)$/);
-        const id = match ? match[1] : null;
-
-        if (id && this.dataManager.getPerson(id)) {
-            return id;
-        }
-
-        const parts = inputValue.trim().split(' ');
-        const soyad = parts.length > 1 ? parts.pop() : '';
-        const ad = parts.join(' ') || inputValue.trim();
-
-        const newId = Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
-        const newPerson = {
-            id: newId,
-            ad: ad,
-            soyad: soyad,
-            cinsiyet: 'Belirtilmemiş',
-            dogumTarihi: '',
-            yakinlikDerecesi: 'Otomatik Eklendi',
-            fotograf: null,
-            offsetX: 0,
-            offsetY: 0
-        };
-        
-        return { isNew: true, person: newPerson };
+    _generateId() {
+        return Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
     }
 
     // --- POPOVER MODAL SİSTEMİ ---
@@ -79,13 +54,11 @@ export class AppController {
     }
 
     /**
-     * Glassmorphism popover modal açar.
-     * @param {MouseEvent|{clientX,clientY}} event - Pozisyon için
-     * @param {string} title - Pencere başlığı
-     * @param {Function} onSubmit - (formData: {ad, soyad, cinsiyet, dogumTarihi}) => void
-     * @param {object} [defaults] - Varsayılan form değerleri
+     * Gelişmiş popover modal.
+     * options.batchMode = true olduğunda Ad alanı virgülle ayrılmış çoklu kabul eder.
+     * options.unionSelect = [{id, label}] olduğunda union seçici dropdown gösterir.
      */
-    showPopover(event, title, onSubmit, defaults = {}) {
+    showPopover(event, title, onSubmit, defaults = {}, options = {}) {
         this.destroyPopover();
 
         const container = document.getElementById('graph-container');
@@ -94,13 +67,26 @@ export class AppController {
         const popover = document.createElement('div');
         popover.id = 'inline-popover';
         popover.className = 'popover-modal';
+
+        let unionSelectHtml = '';
+        if (options.unionSelect && options.unionSelect.length > 1) {
+            const opts = options.unionSelect.map(u => `<option value="${u.id}">${u.label}</option>`).join('');
+            unionSelectHtml = `
+                <label class="popover-label">Hangi birliktelikten?</label>
+                <select id="pop-union-select" class="form-input">${opts}</select>
+            `;
+        }
+
+        const batchHint = options.batchMode ? ' (virgülle ayırarak birden fazla)' : '';
+
         popover.innerHTML = `
             <div class="popover-header">
                 <span class="popover-title">${title}</span>
                 <button class="popover-close" id="popover-close-btn">✕</button>
             </div>
             <form id="popover-form" class="popover-body">
-                <input type="text" id="pop-ad" placeholder="Ad" required class="form-input" value="${defaults.ad || ''}" />
+                ${unionSelectHtml}
+                <input type="text" id="pop-ad" placeholder="Ad${batchHint}" required class="form-input" value="${defaults.ad || ''}" />
                 <input type="text" id="pop-soyad" placeholder="Soyad" class="form-input" value="${defaults.soyad || ''}" />
                 <select id="pop-cinsiyet" class="form-input">
                     <option value="Erkek" ${defaults.cinsiyet === 'Erkek' ? 'selected' : ''}>Erkek</option>
@@ -117,15 +103,13 @@ export class AppController {
 
         container.appendChild(popover);
 
-        // Pozisyon hesapla
         let left = event.clientX - containerRect.left + 15;
         let top = event.clientY - containerRect.top + 15;
         if (left + 280 > containerRect.width) left = left - 300;
-        if (top + 320 > containerRect.height) top = Math.max(10, top - 340);
+        if (top + 360 > containerRect.height) top = Math.max(10, top - 380);
         popover.style.left = `${left}px`;
         popover.style.top = `${top}px`;
 
-        // Olaylar
         const closePopover = () => this.destroyPopover();
         popover.querySelector('#popover-close-btn').addEventListener('click', (e) => { e.stopPropagation(); closePopover(); });
         popover.querySelector('#popover-cancel-btn').addEventListener('click', (e) => { e.stopPropagation(); closePopover(); });
@@ -138,20 +122,21 @@ export class AppController {
                 ad: popover.querySelector('#pop-ad').value,
                 soyad: popover.querySelector('#pop-soyad').value,
                 cinsiyet: popover.querySelector('#pop-cinsiyet').value,
-                dogumTarihi: popover.querySelector('#pop-tarih').value
+                dogumTarihi: popover.querySelector('#pop-tarih').value,
+                selectedUnionId: null
             };
+            const unionEl = popover.querySelector('#pop-union-select');
+            if (unionEl) formData.selectedUnionId = unionEl.value;
             closePopover();
             onSubmit(formData);
         });
 
-        // Autofocus
         setTimeout(() => popover.querySelector('#pop-ad').focus(), 50);
     }
 
-    // --- 4. DÜZENLEME MODU (EDIT MODE) ---
+    // --- DÜZENLEME MODU ---
     enterEditMode(person) {
         this.editingPersonId = person.id;
-
         document.getElementById('p-ad').value = person.ad || '';
         document.getElementById('p-soyad').value = person.soyad || '';
         document.getElementById('p-cinsiyet').value = person.cinsiyet || 'Belirtilmemiş';
@@ -167,58 +152,44 @@ export class AppController {
             previewContainer.classList.add('flex');
         }
 
-        // Buton ve başlığı güncelle
         const submitBtn = document.getElementById('btn-submit-person');
         const formTitle = document.getElementById('form-person-title');
         submitBtn.textContent = 'Kişiyi Güncelle';
         submitBtn.classList.remove('btn-primary');
         submitBtn.classList.add('btn-edit-mode');
         formTitle.textContent = '✏️ Kişiyi Düzenle';
-
-        // İptal butonu göster
         document.getElementById('btn-cancel-edit').classList.remove('hidden');
-
-        // Sidebar'ı öne çıkar ve scrollla
         document.getElementById('p-ad').focus();
     }
 
     exitEditMode() {
         this.editingPersonId = null;
-
-        const form = document.getElementById('form-person');
-        form.reset();
+        document.getElementById('form-person').reset();
         this.currentBase64Image = null;
-        
         const previewContainer = document.getElementById('preview-container');
         previewContainer.classList.add('hidden');
         previewContainer.classList.remove('flex');
-
         const submitBtn = document.getElementById('btn-submit-person');
         const formTitle = document.getElementById('form-person-title');
         submitBtn.textContent = 'Kişiyi Oluştur';
         submitBtn.classList.remove('btn-edit-mode');
         submitBtn.classList.add('btn-primary');
         formTitle.textContent = 'Yeni Kişi Ekle';
-
         document.getElementById('btn-cancel-edit').classList.add('hidden');
     }
 
     // --- CONTEXT MENU ACTIONS ---
     deletePersonWithConfirm(person) {
-        if (confirm(`"${person.ad} ${person.soyad}" kişisini ve tüm bağlantılarını silmek istediğinize emin misiniz?`)) {
+        if (confirm(`"${person.ad} ${person.soyad}" kişisini silmek istediğinize emin misiniz?`)) {
             this.dataManager.deletePerson(person.id);
             this.render();
         }
     }
 
-    // --- 1. ÇİFT EBEVEYN EKLEME (Popover Modal ile) ---
+    // --- ÇİFT EBEVEYN EKLEME ---
     addParentFor(person, event) {
-        // _lastContextEvent renderer tarafından set edilmiş olabilir
         const ev = event || this._lastContextEvent || { clientX: 400, clientY: 300 };
-
-        // Önce Baba popover'ı aç
         this.showPopover(ev, `👨 "${person.ad}" için Baba Ekle`, (babaData) => {
-            // Sonra Anne popover'ı aç
             this.showPopover(ev, `👩 "${person.ad}" için Anne Ekle`, (anneData) => {
                 this._commitParents(person, babaData, anneData);
             }, { cinsiyet: 'Kadın' });
@@ -229,38 +200,31 @@ export class AppController {
         this.dataManager.pushHistory();
         try {
             const partnerIds = [];
-
             if (babaData && babaData.ad.trim() !== '') {
-                const newId = Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
-                const baba = {
-                    id: newId, ad: babaData.ad, soyad: babaData.soyad || '',
+                const id = this._generateId();
+                this.dataManager.data.persons.push({
+                    id, ad: babaData.ad, soyad: babaData.soyad || '',
                     cinsiyet: 'Erkek', dogumTarihi: babaData.dogumTarihi || '',
                     yakinlikDerecesi: 'Baba', fotograf: null, offsetX: 0, offsetY: 0
-                };
-                this.dataManager.data.persons.push(baba);
-                partnerIds.push(newId);
+                });
+                partnerIds.push(id);
             }
-
             if (anneData && anneData.ad.trim() !== '') {
-                const newId = Date.now().toString(36) + Math.random().toString(36).substr(2, 5) + 'a';
-                const anne = {
-                    id: newId, ad: anneData.ad, soyad: anneData.soyad || '',
+                const id = this._generateId() + 'a';
+                this.dataManager.data.persons.push({
+                    id, ad: anneData.ad, soyad: anneData.soyad || '',
                     cinsiyet: 'Kadın', dogumTarihi: anneData.dogumTarihi || '',
                     yakinlikDerecesi: 'Anne', fotograf: null, offsetX: 0, offsetY: 0
-                };
-                this.dataManager.data.persons.push(anne);
-                partnerIds.push(newId);
+                });
+                partnerIds.push(id);
             }
-
             if (partnerIds.length > 0) {
-                const newUnion = {
-                    id: Date.now().toString(36) + Math.random().toString(36).substr(2, 5),
+                this.dataManager.data.unions.push({
+                    id: this._generateId(),
                     partnerIds: [...new Set(partnerIds)],
                     childrenIds: [person.id]
-                };
-                this.dataManager.data.unions.push(newUnion);
+                });
             }
-
             this.dataManager.save();
             this.render();
         } catch (error) {
@@ -269,29 +233,24 @@ export class AppController {
         }
     }
 
-    // --- 2. HIZLI EŞ / PARTNER EKLEME (Popover Modal ile) ---
+    // --- EŞ / PARTNER EKLEME ---
     addPartnerFor(person, event) {
         const ev = event || this._lastContextEvent || { clientX: 400, clientY: 300 };
-
         this.showPopover(ev, `💍 "${person.ad}" için Eş/Partner Ekle`, (formData) => {
             if (!formData.ad || formData.ad.trim() === '') return;
-
             this.dataManager.pushHistory();
             try {
-                const newId = Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
-                const partner = {
-                    id: newId, ad: formData.ad, soyad: formData.soyad || '',
+                const id = this._generateId();
+                this.dataManager.data.persons.push({
+                    id, ad: formData.ad, soyad: formData.soyad || '',
                     cinsiyet: formData.cinsiyet, dogumTarihi: formData.dogumTarihi || '',
                     yakinlikDerecesi: 'Eş', fotograf: null, offsetX: 0, offsetY: 0
-                };
-                this.dataManager.data.persons.push(partner);
-
-                const newUnion = {
-                    id: Date.now().toString(36) + Math.random().toString(36).substr(2, 5),
-                    partnerIds: [person.id, newId],
+                });
+                this.dataManager.data.unions.push({
+                    id: this._generateId(),
+                    partnerIds: [person.id, id],
                     childrenIds: []
-                };
-                this.dataManager.data.unions.push(newUnion);
+                });
                 this.dataManager.save();
                 this.render();
             } catch (error) {
@@ -301,16 +260,20 @@ export class AppController {
         });
     }
 
-    // --- 3. İKİ MEVCUT KİŞİYİ EVLENDİRME ---
+    // --- İKİ KİŞİYİ EVLENDİRME + CYCLE DETECTION ---
     linkTwoPersons(person1, person2) {
+        // Döngü kontrolü
+        if (this.dataManager.wouldCreateCycle(person1.id, person2.id)) {
+            this.renderer.showToast('🚫 Mantıksal Hata: Soy çizgisinde paradoks oluştu! Bu evlilik döngü yaratır.', 'error');
+            return;
+        }
         this.dataManager.pushHistory();
         try {
-            const newUnion = {
-                id: Date.now().toString(36) + Math.random().toString(36).substr(2, 5),
+            this.dataManager.data.unions.push({
+                id: this._generateId(),
                 partnerIds: [person1.id, person2.id],
                 childrenIds: []
-            };
-            this.dataManager.data.unions.push(newUnion);
+            });
             this.dataManager.save();
             this.render();
         } catch (error) {
@@ -319,33 +282,59 @@ export class AppController {
         }
     }
 
-    // --- ÇOCUK EKLEME (Popover Modal ile) ---
+    // --- ÇOCUK EKLEME (Çoklu evlilik: Union seçici + Batch) ---
     addChildFor(person, event) {
         const ev = event || this._lastContextEvent || { clientX: 400, clientY: 300 };
+        const unions = this.dataManager.getUnionsForPerson(person.id);
+
+        let unionSelectOpts = null;
+        if (unions.length > 1) {
+            unionSelectOpts = unions.map(u => {
+                const otherPartners = u.partnerIds
+                    .filter(pid => pid !== person.id)
+                    .map(pid => {
+                        const p = this.dataManager.getPerson(pid);
+                        return p ? `${p.ad} ${p.soyad}` : '?';
+                    }).join(', ');
+                return { id: u.id, label: otherPartners || 'Tek ebeveyn' };
+            });
+        }
 
         this.showPopover(ev, `👶 "${person.ad}" için Çocuk Ekle`, (formData) => {
             if (!formData.ad || formData.ad.trim() === '') return;
 
+            // BATCH: Virgülle ayrılmış isimleri böl
+            const names = formData.ad.split(',').map(n => n.trim()).filter(n => n !== '');
+
             this.dataManager.pushHistory();
             try {
-                const newId = Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
-                const child = {
-                    id: newId, ad: formData.ad, soyad: formData.soyad || '',
-                    cinsiyet: formData.cinsiyet, dogumTarihi: formData.dogumTarihi || '',
-                    yakinlikDerecesi: 'Çocuk', fotograf: null, offsetX: 0, offsetY: 0
-                };
-                this.dataManager.data.persons.push(child);
+                const childIds = [];
+                names.forEach(name => {
+                    const id = this._generateId();
+                    this.dataManager.data.persons.push({
+                        id, ad: name, soyad: formData.soyad || '',
+                        cinsiyet: formData.cinsiyet, dogumTarihi: formData.dogumTarihi || '',
+                        yakinlikDerecesi: 'Çocuk', fotograf: null, offsetX: 0, offsetY: 0
+                    });
+                    childIds.push(id);
+                });
 
-                const existingUnion = this.dataManager.data.unions.find(u => u.partnerIds.includes(person.id));
-                if (existingUnion) {
-                    existingUnion.childrenIds.push(newId);
+                // Union seçimi veya otomatik
+                let targetUnion = null;
+                if (formData.selectedUnionId) {
+                    targetUnion = this.dataManager.getUnion(formData.selectedUnionId);
+                } else if (unions.length === 1) {
+                    targetUnion = unions[0];
+                }
+
+                if (targetUnion) {
+                    childIds.forEach(cid => targetUnion.childrenIds.push(cid));
                 } else {
-                    const newUnion = {
-                        id: Date.now().toString(36) + Math.random().toString(36).substr(2, 5),
+                    this.dataManager.data.unions.push({
+                        id: this._generateId(),
                         partnerIds: [person.id],
-                        childrenIds: [newId]
-                    };
-                    this.dataManager.data.unions.push(newUnion);
+                        childrenIds: childIds
+                    });
                 }
                 this.dataManager.save();
                 this.render();
@@ -353,10 +342,54 @@ export class AppController {
                 console.error("Çocuk ekleme hatası:", error);
                 this.dataManager.undo();
             }
-        });
+        }, {}, { batchMode: true, unionSelect: unionSelectOpts });
     }
 
-    // --- 2. DRAG OFFSET KAYDETME ---
+    // --- KARDEŞ EKLEME (Batch destekli) ---
+    addSiblingFor(person, event) {
+        const ev = event || this._lastContextEvent || { clientX: 400, clientY: 300 };
+
+        this.showPopover(ev, `🧑‍🤝‍🧑 "${person.ad}" için Kardeş Ekle`, (formData) => {
+            if (!formData.ad || formData.ad.trim() === '') return;
+
+            const names = formData.ad.split(',').map(n => n.trim()).filter(n => n !== '');
+
+            this.dataManager.pushHistory();
+            try {
+                const siblingIds = [];
+                names.forEach(name => {
+                    const id = this._generateId();
+                    this.dataManager.data.persons.push({
+                        id, ad: name, soyad: formData.soyad || '',
+                        cinsiyet: formData.cinsiyet, dogumTarihi: formData.dogumTarihi || '',
+                        yakinlikDerecesi: 'Kardeş', fotograf: null, offsetX: 0, offsetY: 0
+                    });
+                    siblingIds.push(id);
+                });
+
+                // Kişinin ebeveyn union'ını bul
+                const parentUnion = this.dataManager.getParentUnion(person.id);
+                if (parentUnion) {
+                    // Mevcut ebeveyn birliğine kardeş olarak ekle
+                    siblingIds.forEach(sid => parentUnion.childrenIds.push(sid));
+                } else {
+                    // Ebeveyn birliği yoksa: görünmez Union kur, hem asıl kişi hem kardeşleri çocuk olarak ekle
+                    this.dataManager.data.unions.push({
+                        id: this._generateId(),
+                        partnerIds: [],
+                        childrenIds: [person.id, ...siblingIds]
+                    });
+                }
+                this.dataManager.save();
+                this.render();
+            } catch (error) {
+                console.error("Kardeş ekleme hatası:", error);
+                this.dataManager.undo();
+            }
+        }, {}, { batchMode: true });
+    }
+
+    // --- DRAG OFFSET ---
     saveOffset(personId, ox, oy) {
         const person = this.dataManager.getPerson(personId);
         if (person) {
@@ -367,22 +400,14 @@ export class AppController {
     }
 
     bindEvents() {
-        // Drag & Drop (Fotoğraf)
         const dropZone = document.getElementById('drop-zone');
         const fileInput = document.getElementById('p-foto');
         const previewContainer = document.getElementById('preview-container');
         const imgPreview = document.getElementById('img-preview');
 
         dropZone.addEventListener('click', () => fileInput.click());
-        
-        dropZone.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            dropZone.classList.add('bg-slate-100');
-        });
-
-        dropZone.addEventListener('dragleave', () => {
-            dropZone.classList.remove('bg-slate-100');
-        });
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('bg-slate-100'); });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('bg-slate-100'));
 
         const handleFile = async (file) => {
             if (file) {
@@ -391,9 +416,7 @@ export class AppController {
                     imgPreview.src = this.currentBase64Image;
                     previewContainer.classList.remove('hidden');
                     previewContainer.classList.add('flex');
-                } catch (err) {
-                    alert(err.message);
-                }
+                } catch (err) { alert(err.message); }
             }
         };
 
@@ -402,17 +425,12 @@ export class AppController {
             dropZone.classList.remove('bg-slate-100');
             handleFile(e.dataTransfer.files[0]);
         });
+        fileInput.addEventListener('change', (e) => handleFile(e.target.files[0]));
 
-        fileInput.addEventListener('change', (e) => {
-            handleFile(e.target.files[0]);
-        });
-
-        // --- Kişi Ekleme / Güncelleme FORMU ---
+        // Kişi Ekleme / Güncelleme
         document.getElementById('form-person').addEventListener('submit', (e) => {
             e.preventDefault();
-            
             if (this.editingPersonId) {
-                // GÜNCELLEME MODU
                 const updates = {
                     ad: document.getElementById('p-ad').value,
                     soyad: document.getElementById('p-soyad').value,
@@ -425,22 +443,18 @@ export class AppController {
                 this.exitEditMode();
                 this.render();
             } else {
-                // YENİ KİŞİ EKLEME MODU
                 const newPerson = {
-                    id: Date.now().toString(36) + Math.random().toString(36).substr(2, 5),
+                    id: this._generateId(),
                     ad: document.getElementById('p-ad').value,
                     soyad: document.getElementById('p-soyad').value,
                     cinsiyet: document.getElementById('p-cinsiyet').value,
                     dogumTarihi: document.getElementById('p-tarih').value,
                     yakinlikDerecesi: document.getElementById('p-yakinlik').value,
                     fotograf: this.currentBase64Image,
-                    offsetX: 0,
-                    offsetY: 0
+                    offsetX: 0, offsetY: 0
                 };
-
                 this.dataManager.addPerson(newPerson);
                 this.render();
-                
                 e.target.reset();
                 this.currentBase64Image = null;
                 previewContainer.classList.add('hidden');
@@ -448,74 +462,68 @@ export class AppController {
             }
         });
 
-        // İptal butonu
-        document.getElementById('btn-cancel-edit').addEventListener('click', () => {
-            this.exitEditMode();
-        });
+        document.getElementById('btn-cancel-edit').addEventListener('click', () => this.exitEditMode());
 
-        // Birliktelik (Union) Ekleme & On-The-Fly Makro
+        // Birliktelik (Union) Formu
         document.getElementById('form-union').addEventListener('submit', (e) => {
             e.preventDefault();
-            
             const p1Val = document.getElementById('u-partner1').value;
             const p2Val = document.getElementById('u-partner2').value;
             const childVal = document.getElementById('u-children').value;
 
             this.dataManager.pushHistory();
-
             try {
                 const partnerIds = [];
                 const childrenIds = [];
-
                 const processInput = (val, targetArray) => {
-                    const res = this.resolvePersonId(val);
-                    if (!res) return;
-                    if (typeof res === 'string') {
-                        targetArray.push(res);
-                    } else if (res.isNew) {
-                        this.dataManager.data.persons.push(res.person);
-                        targetArray.push(res.person.id);
+                    if (!val || val.trim() === '') return;
+                    const match = val.match(/\((.*?)\)$/);
+                    const id = match ? match[1] : null;
+                    if (id && this.dataManager.getPerson(id)) {
+                        targetArray.push(id);
+                    } else {
+                        const parts = val.trim().split(' ');
+                        const soyad = parts.length > 1 ? parts.pop() : '';
+                        const ad = parts.join(' ') || val.trim();
+                        const newId = this._generateId();
+                        this.dataManager.data.persons.push({
+                            id: newId, ad, soyad,
+                            cinsiyet: 'Belirtilmemiş', dogumTarihi: '',
+                            yakinlikDerecesi: 'Otomatik Eklendi',
+                            fotograf: null, offsetX: 0, offsetY: 0
+                        });
+                        targetArray.push(newId);
                     }
                 };
-
                 processInput(p1Val, partnerIds);
                 processInput(p2Val, partnerIds);
-
                 if (childVal && childVal.trim() !== '') {
-                    const childrenArray = childVal.split(',').map(s => s.trim());
-                    childrenArray.forEach(cv => processInput(cv, childrenIds));
+                    childVal.split(',').map(s => s.trim()).forEach(cv => processInput(cv, childrenIds));
                 }
-
                 if (partnerIds.length > 0 || childrenIds.length > 0) {
-                    const newUnion = {
-                        id: Date.now().toString(36) + Math.random().toString(36).substr(2, 5),
+                    this.dataManager.data.unions.push({
+                        id: this._generateId(),
                         partnerIds: [...new Set(partnerIds)],
                         childrenIds: [...new Set(childrenIds)]
-                    };
-                    this.dataManager.data.unions.push(newUnion);
+                    });
                 }
-
-                this.dataManager.save(); 
+                this.dataManager.save();
                 this.render();
                 e.target.reset();
             } catch (error) {
                 console.error("Batch Transaction Hatası:", error);
                 this.dataManager.undo();
-                alert("Bağlantı işlemi sırasında bir hata oluştu ve geri alındı.");
+                alert("İşlem sırasında hata oluştu, geri alındı.");
             }
         });
 
-        // Global Butonlar
         document.getElementById('btn-undo').addEventListener('click', () => {
-            if(this.dataManager.undo()) {
-                this.render();
-            } else {
-                alert("Stack boş: Geri alınabilecek işlem yok.");
-            }
+            if (this.dataManager.undo()) { this.render(); }
+            else { alert("Geri alınabilecek işlem yok."); }
         });
 
         document.getElementById('btn-clear').addEventListener('click', () => {
-            if(confirm("Tüm veri tabanını silmek istediğinize emin misiniz? (Bu işlem geri alınamaz!)")) {
+            if (confirm("Tüm veriyi silmek istediğinize emin misiniz?")) {
                 this.dataManager.clearAllData();
                 this.render();
             }
