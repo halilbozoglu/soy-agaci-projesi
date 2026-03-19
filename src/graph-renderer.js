@@ -89,7 +89,6 @@ export class GraphRenderer {
 
         this._nodePositions = new Map();
         this._linkData = [];
-        this._lineFn = d3.line().curve(d3.curveMonotoneY).x(d => d.x).y(d => d.y);
     }
 
     // --- Linking Mode API (FSM) ---
@@ -213,6 +212,12 @@ export class GraphRenderer {
         if (person.cinsiyet === 'Kadın') return '#f472b6';
         return '#94a3b8';
     }
+    // --- CUBIC BÉZIER ÇIZGI FORMÜLÜ ---
+    _bezierPath(source, target) {
+        const midY = (source.y + target.y) / 2;
+        return `M${source.x},${source.y} C${source.x},${midY} ${target.x},${midY} ${target.x},${target.y}`;
+    }
+
     _getNameColor(person) {
         if (person.cinsiyet === 'Erkek') return '#2563eb';
         if (person.cinsiyet === 'Kadın') return '#db2777';
@@ -280,10 +285,11 @@ export class GraphRenderer {
             const layout = d3dag.sugiyama()
                 .nodeSize(n => {
                     if (!n || !n.data) return [0, 0];
-                    return n.data.type === 'union' ? [80, 80] : [220, 260];
+                    if (n.data.type === 'union' || n.data.type === 'dummy') return [30, 80];
+                    return [220, 120];
                 })
                 .layering(d3dag.layeringSimplex())
-                .decross(d3dag.decrossOpt())
+                .decross(d3dag.decrossTwoLayer())
                 .coord(d3dag.coordQuad());
             layout(dagInfo);
         } catch(error) {
@@ -315,8 +321,10 @@ export class GraphRenderer {
             .attr("d", d => {
                 const srcPos = this._nodePositions.get(d.source.data.id);
                 const tgtPos = this._nodePositions.get(d.target.data.id);
-                if (srcPos && tgtPos) return this._lineFn([srcPos, tgtPos]);
-                return this._lineFn(d.points);
+                if (srcPos && tgtPos) return this._bezierPath(srcPos, tgtPos);
+                // Fallback: d.points varsa ilk ve son noktayı kullan
+                if (d.points && d.points.length >= 2) return this._bezierPath(d.points[0], d.points[d.points.length - 1]);
+                return '';
             })
             .attr("fill", "none")
             .attr("stroke", "#94a3b8")
@@ -492,13 +500,14 @@ export class GraphRenderer {
                     baseX: d.x, baseY: d.y
                 });
 
-                // 3. Bağlı çizgileri eş zamanlı güncelle
+                // 3. Bağlı çizgileri eş zamanlı güncelle (Bézier)
                 self.g.select(".links-layer").selectAll("path.dag-link")
                     .attr("d", linkD => {
                         const srcPos = self._nodePositions.get(linkD.source.data.id);
                         const tgtPos = self._nodePositions.get(linkD.target.data.id);
-                        if (srcPos && tgtPos) return self._lineFn([srcPos, tgtPos]);
-                        return self._lineFn(linkD.points);
+                        if (srcPos && tgtPos) return self._bezierPath(srcPos, tgtPos);
+                        if (linkD.points && linkD.points.length >= 2) return self._bezierPath(linkD.points[0], linkD.points[linkD.points.length - 1]);
+                        return '';
                     });
             })
             .on("end", function(event, d) {
