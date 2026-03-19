@@ -133,7 +133,7 @@ export class GraphRenderer {
 
         const nodeGroup = this.g.append("g")
             .selectAll("g")
-            .data(dagInfo.nodes())
+            .data(dagInfo.descendants())
             .enter()
             .filter(d => d.data.id !== DUMMY_ROOT_ID) // Dummy nodunu gizle
             .append("g")
