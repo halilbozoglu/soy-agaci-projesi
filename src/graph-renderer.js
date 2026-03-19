@@ -310,8 +310,8 @@ export class GraphRenderer {
             const layout = d3dag.sugiyama()
                 .nodeSize(n => {
                     if (!n || !n.data) return [0, 0];
-                    if (n.data.type === 'union' || n.data.type === 'dummy') return [40, 100];
-                    return [240, 140];
+                    if (n.data.type === 'union' || n.data.type === 'dummy') return [50, 140];
+                    return [350, 280];
                 })
                 .layering(d3dag.layeringSimplex())
                 .decross(d3dag.decrossTwoLayer())
@@ -343,8 +343,8 @@ export class GraphRenderer {
             uNode.y = maxY;
         });
 
-        // 2b. X Kümeleme: Eşleri union merkezinin ±110px'ine sabitle
-        const SPOUSE_HALF_GAP = 110;
+        // 2b. X Kümeleme: Eşleri union merkezinin ±80px'ine sabitle
+        const SPOUSE_HALF_GAP = 80;
         data.unions.forEach(u => {
             const uNode = nodeById.get(`u_${u.id}`);
             if (!uNode) return;

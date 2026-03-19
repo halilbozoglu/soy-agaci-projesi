@@ -17,6 +17,27 @@ export class DataManager {
                 this.data = { persons: [], unions: [] };
             }
         }
+        // Legacy Data Migration: Title Case düzeltme
+        this._migrateTitleCase();
+    }
+
+    _toTitleCase(str) {
+        if (!str) return '';
+        return str.trim().split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+    }
+
+    _migrateTitleCase() {
+        let changed = false;
+        this.data.persons.forEach(p => {
+            const newAd = this._toTitleCase(p.ad);
+            const newSoyad = this._toTitleCase(p.soyad);
+            if (newAd !== p.ad || newSoyad !== p.soyad) {
+                p.ad = newAd;
+                p.soyad = newSoyad;
+                changed = true;
+            }
+        });
+        if (changed) this.save();
     }
 
     save() {
