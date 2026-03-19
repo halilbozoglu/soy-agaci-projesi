@@ -48,7 +48,7 @@ export class GraphRenderer {
         const nodeIds = new Set(nodes.map(n => n.id));
         const DUMMY_ROOT_ID = 'virtual_dummy_root';
         
-        nodes.push({ id: DUMMY_ROOT_ID, type: 'dummy', data: {} });
+        nodes.push({ id: DUMMY_ROOT_ID, type: 'dummy', data: { ad: '', soyad: '', cinsiyet: '', dogumTarihi: '', yakinlikDerecesi: '', fotograf: null } });
         nodeIds.add(DUMMY_ROOT_ID); // Validasyondan geçmesi için Set'e ekle
 
         const parentMap = new Map();
@@ -99,7 +99,12 @@ export class GraphRenderer {
 
         try {
             const layout = d3dag.sugiyama()
-                .nodeSize(n => n.data && n.data.type === 'union' ? [60, 60] : [160, 180])
+                .nodeSize(n => {
+                    // FAILSAFE: d3-dag'ın uzun kenarlar için oluşturduğu
+                    // internal dummy node'ların data alanı undefined olabilir.
+                    if (!n || !n.data) return [0, 0];
+                    return n.data.type === 'union' ? [60, 60] : [160, 180];
+                })
                 .layering(d3dag.layeringSimplex())
                 .decross(d3dag.decrossOpt())
                 .coord(d3dag.coordQuad());
