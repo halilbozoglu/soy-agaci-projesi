@@ -23,8 +23,7 @@
             </div>
             <button id="btn-auto-layout" class="w-full bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 py-2.5 rounded-lg text-sm font-semibold transition-all backdrop-blur-sm border border-emerald-500/20">✨ Otomatik Yerleştir</button>
 
-            <!-- Kişi Ekleme Formu -->
-            <div class="form-card">
+            <div class="form-card" id="person-form-card">
                 <h2 id="form-person-title" class="text-md font-bold text-white mb-3">Yeni Kişi Ekle</h2>
                 <form id="form-person" class="space-y-3">
                     <input type="text" id="p-ad" placeholder="Ad" required class="form-input" />
@@ -52,32 +51,7 @@
                 </form>
             </div>
 
-            <!-- Birliktelik (Makro) Formu -->
-            <div class="form-card">
-                <h2 class="text-md font-bold text-white mb-2">Birliktelik Kur</h2>
-                <p class="text-[10px] text-slate-400 mb-3 font-medium">Listede yoksa bile otomatik kişi oluşturulup bağlanır.</p>
-                <form id="form-union" class="space-y-3">
-                    
-                    <div>
-                        <label class="block text-xs font-semibold text-indigo-300 mb-1">👨 Baba</label>
-                        <input type="text" id="u-partner1" list="person-list" placeholder="Baba Adı Girin..." required class="form-input" />
-                    </div>
-                    
-                    <div>
-                        <label class="block text-xs font-semibold text-pink-300 mb-1">👩 Anne</label>
-                        <input type="text" id="u-partner2" list="person-list" placeholder="Anne Adı Girin..." class="form-input" />
-                    </div>
-
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-300 mb-1">👶 Çocuklar (Virgülle Ayırın)</label>
-                        <input type="text" id="u-children" placeholder="Çocuk 1, Çocuk 2..." class="form-input" />
-                    </div>
-
-                    <datalist id="person-list"></datalist>
-
-                    <button type="submit" class="w-full btn-secondary">Bağlantıyı Kur</button>
-                </form>
-            </div>
+            <datalist id="person-list"></datalist>
         </div>
     </aside>
 

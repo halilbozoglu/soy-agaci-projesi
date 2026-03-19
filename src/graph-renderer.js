@@ -311,7 +311,7 @@ export class GraphRenderer {
                 .nodeSize(n => {
                     if (!n || !n.data) return [0, 0];
                     if (n.data.type === 'union' || n.data.type === 'dummy') return [40, 100];
-                    return [300, 140];
+                    return [400, 150];
                 })
                 .layering(d3dag.layeringSimplex())
                 .decross(d3dag.decrossTwoLayer())
@@ -322,8 +322,46 @@ export class GraphRenderer {
             return;
         }
 
-        // --- KALICI OFFSET UYGULAMA (Person + Union) ---
+        // ================================================
+        // POST-PROCESSING: Eş Y Hizalama + X Kümeleme
+        // ================================================
         const allDescendants = dagInfo.descendants();
+        const nodeById = new Map();
+        allDescendants.forEach(d => { nodeById.set(d.data.id, d); });
+
+        // 2a. Y Hizalama: Eşleri aynı dikey hizaya getir
+        data.unions.forEach(u => {
+            const uNode = nodeById.get(`u_${u.id}`);
+            if (!uNode) return;
+            const partnerNodes = u.partnerIds
+                .map(pid => nodeById.get(`p_${pid}`))
+                .filter(Boolean);
+            if (partnerNodes.length < 2) return;
+
+            // En alt (en büyük Y) partner referanstır
+            const maxY = Math.max(...partnerNodes.map(p => p.y));
+            partnerNodes.forEach(p => { p.y = maxY; });
+            uNode.y = maxY; // Union da aynı hizaya
+        });
+
+        // 2b. X Kümeleme: Eşleri union merkezinin ±160px'ine sabitle
+        const SPOUSE_HALF_GAP = 160;
+        data.unions.forEach(u => {
+            const uNode = nodeById.get(`u_${u.id}`);
+            if (!uNode) return;
+            const partnerNodes = u.partnerIds
+                .map(pid => nodeById.get(`p_${pid}`))
+                .filter(Boolean);
+            if (partnerNodes.length !== 2) return;
+
+            // Union merkezi = iki eşin ortası
+            const centerX = (partnerNodes[0].x + partnerNodes[1].x) / 2;
+            uNode.x = centerX;
+            partnerNodes[0].x = centerX - SPOUSE_HALF_GAP;
+            partnerNodes[1].x = centerX + SPOUSE_HALF_GAP;
+        });
+
+        // --- KALICI OFFSET UYGULAMA (Person + Union) ---
         allDescendants.forEach(d => {
             if (d.data.id === DUMMY_ROOT_ID) return;
             const ox = (d.data.data && d.data.data.offsetX) || 0;

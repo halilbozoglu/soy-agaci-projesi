@@ -33,6 +33,15 @@ export class AppController {
     render() {
         this.renderer.render(this.dataManager);
         this.updateDatalist();
+        // Reaktif form görünürlüğü: Sadece ağaç boşken görünsün
+        const formCard = document.getElementById('person-form-card');
+        if (formCard) {
+            if (this.dataManager.data.persons.length > 0 && !this.editingPersonId) {
+                formCard.style.display = 'none';
+            } else {
+                formCard.style.display = '';
+            }
+        }
     }
 
     updateDatalist() {
@@ -571,55 +580,6 @@ export class AppController {
         });
 
         document.getElementById('btn-cancel-edit').addEventListener('click', () => this.exitEditMode());
-
-        document.getElementById('form-union').addEventListener('submit', (e) => {
-            e.preventDefault();
-            const p1Val = document.getElementById('u-partner1').value;
-            const p2Val = document.getElementById('u-partner2').value;
-            const childVal = document.getElementById('u-children').value;
-            this.dataManager.pushHistory();
-            try {
-                const partnerIds = [];
-                const childrenIds = [];
-                const processInput = (val, arr) => {
-                    if (!val || val.trim() === '') return;
-                    const match = val.match(/\((.*?)\)$/);
-                    const id = match ? match[1] : null;
-                    if (id && this.dataManager.getPerson(id)) { arr.push(id); }
-                    else {
-                        const parts = val.trim().split(' ');
-                        const soyad = parts.length > 1 ? parts.pop() : '';
-                        const ad = parts.join(' ') || val.trim();
-                        const newId = this._generateId();
-                        this.dataManager.data.persons.push({
-                            id: newId, ad, soyad, cinsiyet: 'Belirtilmemiş',
-                            dogumTarihi: '', yakinlikDerecesi: 'Otomatik Eklendi',
-                            fotograf: null, offsetX: 0, offsetY: 0
-                        });
-                        arr.push(newId);
-                    }
-                };
-                processInput(p1Val, partnerIds);
-                processInput(p2Val, partnerIds);
-                if (childVal && childVal.trim() !== '') {
-                    childVal.split(',').map(s => s.trim()).forEach(cv => processInput(cv, childrenIds));
-                }
-                if (partnerIds.length > 0 || childrenIds.length > 0) {
-                    this.dataManager.data.unions.push({
-                        id: this._generateId(),
-                        partnerIds: [...new Set(partnerIds)],
-                        childrenIds: [...new Set(childrenIds)]
-                    });
-                }
-                this.dataManager.save();
-                this.render();
-                e.target.reset();
-            } catch (error) {
-                console.error("Batch Transaction Hatası:", error);
-                this.dataManager.undo();
-                alert("İşlem sırasında hata oluştu, geri alındı.");
-            }
-        });
 
         document.getElementById('btn-undo').addEventListener('click', () => {
             if (this.dataManager.undo()) { this.render(); }
