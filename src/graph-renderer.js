@@ -94,7 +94,7 @@ export class GraphRenderer {
         // --- SMOOTH PAN & ZOOM ---
         this.zoom = d3.zoom()
             .scaleExtent([0.1, 4])
-            .filter((event) => !event.ctrlKey) // CTRL basılıyken zoom/pan devre dışı
+            .filter((event) => !event.ctrlKey && !event.button) // CTRL basılıyken zoom/pan devre dışı
             .on("zoom", (e) => this.g.attr("transform", e.transform));
         
         this.svg.call(this.zoom);
@@ -121,21 +121,35 @@ export class GraphRenderer {
         });
 
         // --- CTRL + DRAG: Kutulu Çoklu Seçim (Brush) ---
-        this._brushGroup = this.svg.append("g").attr("class", "brush-layer").style("pointer-events", "none");
+        // Brush katmanı zoom-group'tan BAĞIMSIZ (SVG üzerinde doğrudan)
+        this._brushGroup = this.svg.append("g").attr("class", "brush-layer");
         this._brush = d3.brush()
-            .extent([[0, 0], [4000, 4000]])
-            .on("end", (event) => this._onBrushEnd(event));
+            .extent([[0, 0], [8000, 8000]])
+            .on("start", () => { this.svg.on(".zoom", null); }) // Brush sırasında zoom devre dışı
+            .on("end", (event) => {
+                this._onBrushEnd(event);
+                this.svg.call(this.zoom); // Brush bittikten sonra zoom'u geri aç
+            });
         this._brushGroup.call(this._brush);
-        this._brushGroup.select(".overlay").style("pointer-events", "none");
-        this._brushGroup.select(".selection").style("fill", "rgba(99,102,241,0.15)").style("stroke", "#6366f1").style("stroke-dasharray", "4 2");
+        // Varsayılan: brush overlay tıklanamaz (sadece CTRL basılıyken aktif)
+        this._brushGroup.select(".overlay").style("pointer-events", "none").style("cursor", "default");
+        this._brushGroup.select(".selection")
+            .style("fill", "rgba(99,102,241,0.15)")
+            .style("stroke", "#6366f1")
+            .style("stroke-width", "1.5")
+            .style("stroke-dasharray", "4 2");
 
-        // CTRL tuşu ile brush'u aktifleştir
+        // CTRL basılıyken brush overlay aktif, bırakınca deaktif
         const self_init = this;
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Control') self_init._brushGroup.select(".overlay").style("pointer-events", "all");
+            if (e.key === 'Control') {
+                self_init._brushGroup.select(".overlay").style("pointer-events", "all").style("cursor", "crosshair");
+            }
         });
         document.addEventListener('keyup', (e) => {
-            if (e.key === 'Control') self_init._brushGroup.select(".overlay").style("pointer-events", "none");
+            if (e.key === 'Control') {
+                self_init._brushGroup.select(".overlay").style("pointer-events", "none").style("cursor", "default");
+            }
         });
 
         this._nodePositions = new Map();
@@ -386,18 +400,16 @@ export class GraphRenderer {
             const layout = d3dag.sugiyama()
                 .nodeSize(n => {
                     if (!n || !n.data) return [0, 0];
-                    // Union: Katı sınır kutusu (2 eş + marjin = 600px).
-                    // Sugiyama bu alana başka düğüm yerleştirmez.
-                    if (n.data.type === 'union') return [600, 350];
+                    // Union: Katı sınır kutusu (2 eş + marjin).
+                    if (n.data.type === 'union') return [500, 350];
                     if (n.data.type === 'dummy') return [50, 350];
-                    // Person: Dar yatay, geniş dikey
-                    return [250, 350];
+                    // Person: Dar yatay → staggered dizilimle kompaktlaşır
+                    return [180, 350];
                 })
                 .layering(d3dag.layeringSimplex())
                 .decross(d3dag.decrossTwoLayer())
-                // coordGreedy: Alt-ağaçları (sülaleleri) izole tutar,
-                // merkeze agresif sıkıştırma yapmaz
-                .coord(d3dag.coordGreedy());
+                // coordCenter: Ağacı merkeze toplar, kuzenler savrulmaz
+                .coord(d3dag.coordCenter());
             layout(dagInfo);
         } catch(error) {
             console.error("DAG Layout Hatası:", error);
@@ -425,9 +437,8 @@ export class GraphRenderer {
             uNode.y = maxY;
         });
 
-        // 2b. X Kümeleme: Eşleri Union merkezinin ±140px'ine sabitle
-        // Union 600px katı sınır → eşler (280px toplam) sınır içinde kalır
-        const SPOUSE_HALF_GAP = 140;
+        // 2b. X Kümeleme: Eşleri Union merkezinin ±120px'ine sabitle
+        const SPOUSE_HALF_GAP = 120;
         data.unions.forEach(u => {
             const uNode = nodeById.get(`u_${u.id}`);
             if (!uNode) return;
@@ -436,9 +447,22 @@ export class GraphRenderer {
                 .filter(Boolean);
             if (partnerNodes.length !== 2) return;
 
-            // Union X'ini referans al (coordGreedy'nin hesapladığı değer)
             partnerNodes[0].x = uNode.x - SPOUSE_HALF_GAP;
             partnerNodes[1].x = uNode.x + SPOUSE_HALF_GAP;
+        });
+
+        // 2c. Kardeşlerin Çapraz (Staggered) Dizilimi
+        data.unions.forEach(u => {
+            const uNode = nodeById.get(`u_${u.id}`);
+            if (!uNode) return;
+            const childNodes = u.childrenIds
+                .map(cid => nodeById.get(`p_${cid}`))
+                .filter(Boolean);
+            if (childNodes.length < 2) return;
+            childNodes.forEach((child, idx) => {
+                // Çift indeksli çocuklar normal Y, tek indeksli çocuklar +80px aşağıda
+                child.y = uNode.y + 150 + (idx % 2 === 0 ? 0 : 80);
+            });
         });
 
         // --- KALICI OFFSET UYGULAMA (Person + Union) ---
@@ -470,16 +494,28 @@ export class GraphRenderer {
                 return '';
             })
             .attr("fill", "none")
-            .attr("stroke", "#94a3b8")
-            .attr("stroke-width", 2)
-            .attr("stroke-opacity", 0.35)
-            // Boşanmış union → partner çizgileri kesik çizgili
+            // Edge Hiyerarşisi: Person→Union kalın/düz, Union→Child ince/kesik
+            .attr("stroke", d => {
+                if (d.source.data.type === 'person') return '#64748b'; // Ebeveyn → Union: koyu
+                return '#94a3b8'; // Union → Çocuk: soluk
+            })
+            .attr("stroke-width", d => {
+                if (d.source.data.type === 'person') return 3; // Ebeveyn → Union: kalın
+                return 2; // Union → Çocuk: ince
+            })
+            .attr("stroke-opacity", d => {
+                if (d.source.data.type === 'person') return 0.5;
+                return 0.35;
+            })
             .attr("stroke-dasharray", d => {
+                // Boşanmış union çizgileri kesik
                 if (d.target.data.type === 'union' && d.target.data.data && d.target.data.data.isDivorced) return '6 3';
                 if (d.source.data.type === 'union' && d.source.data.data && d.source.data.data.isDivorced) return '6 3';
-                return null;
+                // Union → Çocuk: kesik çizgili
+                if (d.source.data.type === 'union') return '6 6';
+                return null; // Person → Union: düz
             })
-            // Ok sadece Union → Child yönünde (source union, target person)
+            // Ok sadece Union → Child yönünde
             .attr("marker-end", d => {
                 if (d.source.data.type === 'union') return 'url(#arrow)';
                 return null;
@@ -549,17 +585,19 @@ export class GraphRenderer {
             .style("cursor", "pointer")
             .style("filter", "url(#card-shadow)");
 
-        // Vefat: siyah kurdele (sağ üst köşe)
+        // Vefat: siyah matem kurdelesi (sağ üst köşe üçgen) + hilal ikonu
         personGroups.filter(d => d.data.data.isDeceased)
             .append("polygon")
-            .attr("points", `${cardWidth/2 - 22},${-cardHeight/2} ${cardWidth/2},${-cardHeight/2} ${cardWidth/2},${-cardHeight/2 + 22}`)
+            .attr("points", `${cardWidth/2 - 24},${-cardHeight/2} ${cardWidth/2},${-cardHeight/2} ${cardWidth/2},${-cardHeight/2 + 24}`)
             .attr("fill", "#1e293b")
-            .attr("opacity", 0.85);
+            .attr("opacity", 0.9);
+        // Hilal (Crescent) SVG path
         personGroups.filter(d => d.data.data.isDeceased)
-            .append("text")
-            .attr("x", cardWidth/2 - 6).attr("y", -cardHeight/2 + 11)
-            .attr("text-anchor", "middle").attr("fill", "white").attr("font-size", "8px")
-            .text("✝");
+            .append("path")
+            .attr("d", "M0,-5 A5,5,0,1,1,0,5 A3.5,3.5,0,1,0,0,-5Z")
+            .attr("transform", `translate(${cardWidth/2 - 7},${-cardHeight/2 + 8}) scale(1)`)
+            .attr("fill", "white")
+            .attr("opacity", 0.95);
 
         personGroups.append("circle")
             .attr("cx", -cardWidth/2 + 14).attr("cy", -cardHeight/2 + 14).attr("r", 8)
