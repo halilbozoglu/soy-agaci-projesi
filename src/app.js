@@ -15,11 +15,12 @@ export class AppController {
             addSibling: (person, ev) => this.addSiblingFor(person, ev),
             addPartner: (person, ev) => this.addPartnerFor(person, ev),
             delete: (person) => this.deletePersonWithConfirm(person),
-            onDragEnd: (personId, ox, oy) => this.saveOffset(personId, ox, oy),
+            onDragEnd: (id, ox, oy, nodeType) => this.saveOffset(id, ox, oy, nodeType),
             _setLastEvent: (ev) => { this._lastContextEvent = ev; },
             // FSM Linking
             startLinkingFSM: (person, action, ev) => this.startLinkingFSM(person, action, ev),
-            onLinkingComplete: (p1, p2, state, unionId) => this.onLinkingComplete(p1, p2, state, unionId)
+            onLinkingComplete: (p1, p2, state, unionId) => this.onLinkingComplete(p1, p2, state, unionId),
+            onEditParentsComplete: (child, parents) => this.onEditParentsComplete(child, parents)
         });
     }
 
@@ -320,7 +321,7 @@ export class AppController {
                 this.dataManager.data.persons.push({
                     id, ad: babaData.ad, soyad: babaData.soyad || '',
                     cinsiyet: 'Erkek', dogumTarihi: babaData.dogumTarihi || '',
-                    yakinlikDerecesi: 'Baba', fotograf: null, offsetX: 0, offsetY: 0
+                    yakinlikDerecesi: '', fotograf: null, offsetX: 0, offsetY: 0
                 });
                 newPartnerIds.push(id);
             }
@@ -329,7 +330,7 @@ export class AppController {
                 this.dataManager.data.persons.push({
                     id, ad: anneData.ad, soyad: anneData.soyad || '',
                     cinsiyet: 'Kadın', dogumTarihi: anneData.dogumTarihi || '',
-                    yakinlikDerecesi: 'Anne', fotograf: null, offsetX: 0, offsetY: 0
+                    yakinlikDerecesi: '', fotograf: null, offsetX: 0, offsetY: 0
                 });
                 newPartnerIds.push(id);
             }
@@ -367,7 +368,7 @@ export class AppController {
                 this.dataManager.data.persons.push({
                     id, ad: formData.ad, soyad: formData.soyad || '',
                     cinsiyet: formData.cinsiyet, dogumTarihi: formData.dogumTarihi || '',
-                    yakinlikDerecesi: 'Eş', fotograf: null, offsetX: 0, offsetY: 0
+                    yakinlikDerecesi: '', fotograf: null, offsetX: 0, offsetY: 0
                 });
                 this.dataManager.data.unions.push({
                     id: this._generateId(),
@@ -412,7 +413,7 @@ export class AppController {
                     this.dataManager.data.persons.push({
                         id, ad: name, soyad: formData.soyad || '',
                         cinsiyet: formData.cinsiyet, dogumTarihi: formData.dogumTarihi || '',
-                        yakinlikDerecesi: 'Çocuk', fotograf: null, offsetX: 0, offsetY: 0
+                        yakinlikDerecesi: '', fotograf: null, offsetX: 0, offsetY: 0
                     });
                     childIds.push(id);
                 });
@@ -449,7 +450,7 @@ export class AppController {
                     this.dataManager.data.persons.push({
                         id, ad: name, soyad: formData.soyad || '',
                         cinsiyet: formData.cinsiyet, dogumTarihi: formData.dogumTarihi || '',
-                        yakinlikDerecesi: 'Kardeş', fotograf: null, offsetX: 0, offsetY: 0
+                        yakinlikDerecesi: '', fotograf: null, offsetX: 0, offsetY: 0
                     });
                     siblingIds.push(id);
                 });
@@ -469,13 +470,39 @@ export class AppController {
         }, {}, { batchMode: true });
     }
 
-    saveOffset(personId, ox, oy) {
-        const person = this.dataManager.getPerson(personId);
-        if (person) {
-            person.offsetX = ox;
-            person.offsetY = oy;
-            this.dataManager.save();
+    saveOffset(id, ox, oy, nodeType) {
+        if (nodeType === 'union') {
+            const union = this.dataManager.getUnion(id);
+            if (union) {
+                union.offsetX = ox;
+                union.offsetY = oy;
+                this.dataManager.save();
+            }
+        } else {
+            const person = this.dataManager.getPerson(id);
+            if (person) {
+                person.offsetX = ox;
+                person.offsetY = oy;
+                this.dataManager.save();
+            }
         }
+    }
+
+    // ============================================================
+    // RE-PARENTING: Ebeveyn değiştirme tamamlandığında
+    // ============================================================
+    onEditParentsComplete(child, parents) {
+        const newParentIds = parents.map(p => p.id);
+        // Cycle check
+        for (const pid of newParentIds) {
+            if (this.dataManager.hasCycle(child.id, pid)) {
+                this.renderer.showToast('🚫 Mantıksal Hata: Bu ebeveyn ataması döngü yaratır!', 'error');
+                return;
+            }
+        }
+        this.dataManager.reparentChild(child.id, newParentIds);
+        this.render();
+        this.renderer.showToast(`✅ "${child.ad}" için ebeveynler değiştirildi.`, 'success');
     }
 
     // ============================================================

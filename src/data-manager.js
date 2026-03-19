@@ -163,6 +163,61 @@ export class DataManager {
                 p.offsetX = 0;
                 p.offsetY = 0;
             });
+            this.data.unions.forEach(u => {
+                u.offsetX = 0;
+                u.offsetY = 0;
+            });
+        });
+    }
+
+    // İki kişi arasında mevcut bir Union bul (partner olarak)
+    findUnionBetween(personId1, personId2) {
+        return this.data.unions.find(u =>
+            u.partnerIds.includes(personId1) && u.partnerIds.includes(personId2)
+        );
+    }
+
+    // Re-Parenting: Çocuğun ebeveynlerini değiştir (atomik)
+    reparentChild(childId, newParentIds) {
+        this.executeTransaction(() => {
+            // 1. Çocuğu eski tüm Union'lardan child olarak çıkar
+            this.data.unions.forEach(u => {
+                u.childrenIds = u.childrenIds.filter(cid => cid !== childId);
+            });
+
+            // 2. Boş kalan Union'ları temizle (GC)
+            this.data.unions = this.data.unions.filter(u => {
+                const totalMembers = u.partnerIds.length + u.childrenIds.length;
+                if (totalMembers === 0) return false;
+                if (u.partnerIds.length <= 1 && u.childrenIds.length === 0) return false;
+                return true;
+            });
+
+            // 3. Yeni ebeveynler arasında mevcut Union var mı?
+            let targetUnion = null;
+            if (newParentIds.length === 2) {
+                targetUnion = this.data.unions.find(u =>
+                    u.partnerIds.includes(newParentIds[0]) && u.partnerIds.includes(newParentIds[1])
+                );
+            } else if (newParentIds.length === 1) {
+                // Tek ebeveyn: o kişinin partner olduğu herhangi bir union'a bağla
+                targetUnion = this.data.unions.find(u => u.partnerIds.includes(newParentIds[0]));
+            }
+
+            if (targetUnion) {
+                if (!targetUnion.childrenIds.includes(childId)) {
+                    targetUnion.childrenIds.push(childId);
+                }
+            } else {
+                // Yeni Union oluştur
+                const newUnionId = Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+                this.data.unions.push({
+                    id: newUnionId,
+                    partnerIds: [...newParentIds],
+                    childrenIds: [childId],
+                    offsetX: 0, offsetY: 0
+                });
+            }
         });
     }
 }

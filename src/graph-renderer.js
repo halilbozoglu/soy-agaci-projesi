@@ -7,9 +7,11 @@ export class GraphRenderer {
         this.callbacks = callbacks || {};
 
         // --- FSM Linking State ---
-        this.linkingState = null; // null | 'SPOUSE' | 'CHILD' | 'SIBLING'
+        this.linkingState = null; // null | 'SPOUSE' | 'CHILD' | 'SIBLING' | 'EDIT_PARENTS'
         this._linkingSourcePerson = null;
-        this._linkingTargetUnionId = null; // CHILD/SIBLING modları için hedef union
+        this._linkingTargetUnionId = null;
+        this._editParentsChild = null;   // EDIT_PARENTS: çocuk kişi
+        this._editParentsSelected = [];  // EDIT_PARENTS: seçilen ebeveynler
 
         const container = document.getElementById(containerId);
         container.innerHTML = "";
@@ -108,7 +110,7 @@ export class GraphRenderer {
     get isLinkingMode() { return this.linkingState !== null; }
 
     enterLinkingMode(sourcePerson, mode, targetUnionId) {
-        this.linkingState = mode; // 'SPOUSE' | 'CHILD' | 'SIBLING'
+        this.linkingState = mode;
         this._linkingSourcePerson = sourcePerson;
         this._linkingTargetUnionId = targetUnionId || null;
 
@@ -120,20 +122,27 @@ export class GraphRenderer {
         const label = modeLabels[mode] || 'Bağlamak';
         this.showToast(`🔗 "${sourcePerson.ad} ${sourcePerson.soyad}" → ${label} için 2. kişiyi ağaçtan seçin... (ESC ile iptal)`, 'linking');
         this.svg.style("cursor", "crosshair");
+        this.g.selectAll(".node-type-person").classed("linking-candidate", true);
+    }
 
-        // Linking modunda kişi kartlarına hover glow ekle
-        this.g.selectAll(".node-type-person")
-            .classed("linking-candidate", true);
+    enterEditParentsMode(childPerson) {
+        this.linkingState = 'EDIT_PARENTS';
+        this._editParentsChild = childPerson;
+        this._editParentsSelected = [];
+        this.showToast(`👨‍👩‍👦 "${childPerson.ad}" → 1. Ebeveyni ağaçtan seçin... (ESC ile iptal)`, 'linking');
+        this.svg.style("cursor", "crosshair");
+        this.g.selectAll(".node-type-person").classed("linking-candidate", true);
     }
 
     cancelLinkingMode() {
         this.linkingState = null;
         this._linkingSourcePerson = null;
         this._linkingTargetUnionId = null;
+        this._editParentsChild = null;
+        this._editParentsSelected = [];
         this.hideToast();
         this.svg.style("cursor", null);
-        this.g.selectAll(".node-type-person")
-            .classed("linking-candidate", false);
+        this.g.selectAll(".node-type-person").classed("linking-candidate", false);
     }
 
     hideContextMenu() {
@@ -158,6 +167,7 @@ export class GraphRenderer {
             { icon: '🔗', label: 'Başkasıyla Evlendir', action: 'startLinkSpouse' },
             { icon: '🔗', label: 'Mevcut Kişiyi Çocuk Yap', action: 'startLinkChild' },
             { icon: '🔗', label: 'Mevcut Kişiyi Kardeş Yap', action: 'startLinkSibling' },
+            { icon: '👨‍👩‍👦', label: 'Ebeveynleri Değiştir', action: 'startEditParents' },
             { sep: true },
             { icon: '🗑️', label: 'Sil', action: 'delete', danger: true }
         ];
@@ -180,6 +190,8 @@ export class GraphRenderer {
                     if (this.callbacks.startLinkingFSM) {
                         this.callbacks.startLinkingFSM(personData, item.action, event);
                     }
+                } else if (item.action === 'startEditParents') {
+                    this.enterEditParentsMode(personData);
                 } else if (this.callbacks[item.action]) {
                     if (this.callbacks._setLastEvent) this.callbacks._setLastEvent(event);
                     this.callbacks[item.action](personData, event);
@@ -298,8 +310,8 @@ export class GraphRenderer {
             const layout = d3dag.sugiyama()
                 .nodeSize(n => {
                     if (!n || !n.data) return [0, 0];
-                    if (n.data.type === 'union' || n.data.type === 'dummy') return [30, 80];
-                    return [220, 120];
+                    if (n.data.type === 'union' || n.data.type === 'dummy') return [40, 100];
+                    return [300, 140];
                 })
                 .layering(d3dag.layeringSimplex())
                 .decross(d3dag.decrossTwoLayer())
@@ -310,12 +322,12 @@ export class GraphRenderer {
             return;
         }
 
-        // --- KALICI OFFSET UYGULAMA ---
+        // --- KALICI OFFSET UYGULAMA (Person + Union) ---
         const allDescendants = dagInfo.descendants();
         allDescendants.forEach(d => {
             if (d.data.id === DUMMY_ROOT_ID) return;
-            const ox = (d.data.type === 'person' && d.data.data.offsetX) || 0;
-            const oy = (d.data.type === 'person' && d.data.data.offsetY) || 0;
+            const ox = (d.data.data && d.data.data.offsetX) || 0;
+            const oy = (d.data.data && d.data.data.offsetY) || 0;
             this._nodePositions.set(d.data.id, { x: d.x + ox, y: d.y + oy, baseX: d.x, baseY: d.y });
         });
 
@@ -363,7 +375,7 @@ export class GraphRenderer {
                 return pos ? `translate(${pos.x},${pos.y})` : `translate(${d.x},${d.y})`;
             });
 
-        // Union düğümleri
+        // Union düğümleri (sürüklenebilir)
         const unionGroups = nodeGroup.filter(d => d.data.type === 'union');
         unionGroups.append("circle")
             .attr("r", 6)
@@ -371,7 +383,7 @@ export class GraphRenderer {
             .attr("stroke", "#e2e8f0")
             .attr("stroke-width", 1.5)
             .attr("opacity", 0.8)
-            .style("cursor", "default");
+            .style("cursor", "grab");
 
         // Person düğümleri
         const personGroups = nodeGroup.filter(d => d.data.type === 'person');
@@ -468,7 +480,29 @@ export class GraphRenderer {
         personGroups.on("click", function(event, d) {
             event.stopPropagation();
 
-            // Linking Mode aktifse: context menu AÇILMAZ
+            // EDIT_PARENTS modu
+            if (self.linkingState === 'EDIT_PARENTS' && self._editParentsChild) {
+                const clickedPerson = d.data.data;
+                if (clickedPerson.id === self._editParentsChild.id) {
+                    self.showToast('⚠️ Çocuğun kendisini ebeveyn olarak seçemezsiniz.', 'error');
+                    return;
+                }
+                self._editParentsSelected.push(clickedPerson);
+                if (self._editParentsSelected.length === 1) {
+                    self.showToast(`👨‍👩‍👦 1. ebeveyn: "${clickedPerson.ad}". 2. Ebeveyni seçin veya boşluğa tıklayın...`, 'linking');
+                    return;
+                }
+                // 2 ebeveyn seçildi → callback
+                const child = self._editParentsChild;
+                const parents = [...self._editParentsSelected];
+                self.cancelLinkingMode();
+                if (self.callbacks.onEditParentsComplete) {
+                    self.callbacks.onEditParentsComplete(child, parents);
+                }
+                return;
+            }
+
+            // Diğer Linking modları
             if (self.linkingState && self._linkingSourcePerson) {
                 const secondPerson = d.data.data;
                 const firstPerson = self._linkingSourcePerson;
@@ -479,25 +513,37 @@ export class GraphRenderer {
                 const currentState = self.linkingState;
                 const targetUnionId = self._linkingTargetUnionId;
                 self.cancelLinkingMode();
-
                 if (self.callbacks.onLinkingComplete) {
                     self.callbacks.onLinkingComplete(firstPerson, secondPerson, currentState, targetUnionId);
                 }
                 return;
             }
 
-            // Normal mod: Context menü aç
+            // Normal mod
             self.showContextMenu(event, d.data.data);
         });
 
-        // --- DRAG & DROP (subject bazlı dx/dy akümülasyon) ---
+        // EDIT_PARENTS: boşluğa tıklayınca tek ebeveynle tamamla
+        this.svg.on("click.editparents", () => {
+            if (self.linkingState === 'EDIT_PARENTS' && self._editParentsSelected.length === 1) {
+                const child = self._editParentsChild;
+                const parents = [...self._editParentsSelected];
+                self.cancelLinkingMode();
+                if (self.callbacks.onEditParentsComplete) {
+                    self.callbacks.onEditParentsComplete(child, parents);
+                }
+            }
+        });
+
+        // --- DRAG & DROP: Hem Person hem Union sürüklenebilir ---
+        const draggableGroups = nodeGroup.filter(d => d.data.type === 'person' || d.data.type === 'union');
+
         const dragBehavior = d3.drag()
             .filter(function(event) {
                 if (self.linkingState) return false;
                 return !event.ctrlKey && !event.button;
             })
             .subject(function(event, d) {
-                // Mevcut pozisyonu subject olarak döndür → event.x/y buna göre hesaplanır
                 const pos = self._nodePositions.get(d.data.id);
                 return pos ? { x: pos.x, y: pos.y } : { x: d.x, y: d.y };
             })
@@ -505,20 +551,10 @@ export class GraphRenderer {
                 d3.select(this).raise().classed("dragging", true);
             })
             .on("drag", function(event, d) {
-                // event.x/y artık subject'e göre doğru hesaplanıyor
                 const newX = event.x;
                 const newY = event.y;
-
-                // 1. DOM: düğümü anında taşı
                 d3.select(this).attr("transform", `translate(${newX},${newY})`);
-
-                // 2. Pozisyon map'ini güncelle
-                self._nodePositions.set(d.data.id, {
-                    x: newX, y: newY,
-                    baseX: d.x, baseY: d.y
-                });
-
-                // 3. Bağlı çizgileri eş zamanlı güncelle (Bézier)
+                self._nodePositions.set(d.data.id, { x: newX, y: newY, baseX: d.x, baseY: d.y });
                 self.g.select(".links-layer").selectAll("path.dag-link")
                     .attr("d", linkD => {
                         const srcPos = self._nodePositions.get(linkD.source.data.id);
@@ -530,17 +566,18 @@ export class GraphRenderer {
             })
             .on("end", function(event, d) {
                 d3.select(this).classed("dragging", false);
-                if (d.data.type === 'person') {
-                    // Offset = nihai pozisyon - sugiyama base pozisyonu
-                    const pos = self._nodePositions.get(d.data.id);
-                    const ox = pos ? pos.x - pos.baseX : 0;
-                    const oy = pos ? pos.y - pos.baseY : 0;
-                    if (self.callbacks.onDragEnd) {
-                        self.callbacks.onDragEnd(d.data.data.id, ox, oy);
-                    }
+                const pos = self._nodePositions.get(d.data.id);
+                const ox = pos ? pos.x - pos.baseX : 0;
+                const oy = pos ? pos.y - pos.baseY : 0;
+                if (self.callbacks.onDragEnd) {
+                    self.callbacks.onDragEnd(
+                        d.data.type === 'person' ? d.data.data.id : d.data.data.id,
+                        ox, oy,
+                        d.data.type  // 'person' veya 'union'
+                    );
                 }
             });
         
-        personGroups.call(dragBehavior);
+        draggableGroups.call(dragBehavior);
     }
 }
