@@ -314,7 +314,7 @@ export class AppController {
     _commitParents(person, babaData, anneData) {
         this.dataManager.pushHistory();
         try {
-            const partnerIds = [];
+            const newPartnerIds = [];
             if (babaData && babaData.ad.trim() !== '') {
                 const id = this._generateId();
                 this.dataManager.data.persons.push({
@@ -322,7 +322,7 @@ export class AppController {
                     cinsiyet: 'Erkek', dogumTarihi: babaData.dogumTarihi || '',
                     yakinlikDerecesi: 'Baba', fotograf: null, offsetX: 0, offsetY: 0
                 });
-                partnerIds.push(id);
+                newPartnerIds.push(id);
             }
             if (anneData && anneData.ad.trim() !== '') {
                 const id = this._generateId() + 'a';
@@ -331,14 +331,26 @@ export class AppController {
                     cinsiyet: 'Kadın', dogumTarihi: anneData.dogumTarihi || '',
                     yakinlikDerecesi: 'Anne', fotograf: null, offsetX: 0, offsetY: 0
                 });
-                partnerIds.push(id);
+                newPartnerIds.push(id);
             }
-            if (partnerIds.length > 0) {
-                this.dataManager.data.unions.push({
-                    id: this._generateId(),
-                    partnerIds: [...new Set(partnerIds)],
-                    childrenIds: [person.id]
-                });
+            if (newPartnerIds.length > 0) {
+                // DEDUP: Kişinin zaten child olarak bağlı olduğu bir Union varsa kullan
+                const existingParentUnion = this.dataManager.getParentUnion(person.id);
+                if (existingParentUnion) {
+                    // Mevcut union'a partner olarak ekle (duplikasyon önle)
+                    newPartnerIds.forEach(pid => {
+                        if (!existingParentUnion.partnerIds.includes(pid)) {
+                            existingParentUnion.partnerIds.push(pid);
+                        }
+                    });
+                } else {
+                    // Yeni Union oluştur
+                    this.dataManager.data.unions.push({
+                        id: this._generateId(),
+                        partnerIds: [...new Set(newPartnerIds)],
+                        childrenIds: [person.id]
+                    });
+                }
             }
             this.dataManager.save();
             this.render();
@@ -372,6 +384,7 @@ export class AppController {
         const ev = event || this._lastContextEvent || { clientX: 400, clientY: 300 };
         const unions = this.dataManager.getUnionsForPerson(person.id);
 
+        // Çoklu evlilik: Union seçimi ZORUNLU
         let unionSelectOpts = null;
         if (unions.length > 1) {
             unionSelectOpts = unions.map(u => {
@@ -383,6 +396,13 @@ export class AppController {
 
         this.showPopover(ev, `👶 "${person.ad}" için Çocuk Ekle`, (formData) => {
             if (!formData.ad || formData.ad.trim() === '') return;
+
+            // Çoklu evlilikte union seçimi zorunluyken seçim yapılmadıysa uyar
+            if (unions.length > 1 && !formData.selectedUnionId) {
+                this.renderer.showToast('⚠️ Birden fazla evlilik var, union seçimi zorunlu!', 'error');
+                return;
+            }
+
             const names = formData.ad.split(',').map(n => n.trim()).filter(n => n !== '');
             this.dataManager.pushHistory();
             try {
@@ -403,6 +423,7 @@ export class AppController {
                 if (targetUnion) {
                     childIds.forEach(cid => targetUnion.childrenIds.push(cid));
                 } else {
+                    // Union yoksa yeni oluştur
                     this.dataManager.data.unions.push({
                         id: this._generateId(),
                         partnerIds: [person.id],

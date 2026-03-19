@@ -69,6 +69,19 @@ export class GraphRenderer {
         defaultGrad.append("stop").attr("offset", "0%").attr("stop-color", "#f8fafc");
         defaultGrad.append("stop").attr("offset", "100%").attr("stop-color", "#f1f5f9");
 
+        // Ok işareti (Union → Child yönü)
+        defs.append("marker")
+            .attr("id", "arrow")
+            .attr("viewBox", "0 -5 10 10")
+            .attr("refX", 20)
+            .attr("refY", 0)
+            .attr("markerWidth", 6)
+            .attr("markerHeight", 6)
+            .attr("orient", "auto")
+            .append("path")
+            .attr("d", "M0,-5L10,0L0,5")
+            .attr("fill", "#94a3b8");
+
         this.g = this.svg.append("g").attr("id", "zoom-group");
         
         // --- SMOOTH PAN & ZOOM ---
@@ -329,7 +342,12 @@ export class GraphRenderer {
             .attr("fill", "none")
             .attr("stroke", "#94a3b8")
             .attr("stroke-width", 2)
-            .attr("stroke-opacity", 0.35);
+            .attr("stroke-opacity", 0.35)
+            // Ok sadece Union → Child yönünde (source union, target person)
+            .attr("marker-end", d => {
+                if (d.source.data.type === 'union') return 'url(#arrow)';
+                return null;
+            });
 
         // --- DÜĞÜM ÇİZİMİ ---
         const nodeGroup = this.g.append("g").attr("class", "nodes-layer")
