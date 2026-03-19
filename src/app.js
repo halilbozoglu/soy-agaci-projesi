@@ -584,5 +584,10 @@ export class AppController {
                 this.render();
             }
         });
+
+        document.getElementById('btn-auto-layout').addEventListener('click', () => {
+            this.dataManager.resetAllOffsets();
+            this.render();
+        });
     }
 }

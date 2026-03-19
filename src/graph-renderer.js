@@ -280,7 +280,7 @@ export class GraphRenderer {
             const layout = d3dag.sugiyama()
                 .nodeSize(n => {
                     if (!n || !n.data) return [0, 0];
-                    return n.data.type === 'union' ? [60, 60] : [200, 220];
+                    return n.data.type === 'union' ? [80, 80] : [220, 260];
                 })
                 .layering(d3dag.layeringSimplex())
                 .decross(d3dag.decrossOpt())
@@ -464,22 +464,35 @@ export class GraphRenderer {
             self.showContextMenu(event, d.data.data);
         });
 
-        // --- DRAG & DROP (click/drag izolasyonu: filter ile) ---
+        // --- DRAG & DROP (subject bazlı dx/dy akümülasyon) ---
         const dragBehavior = d3.drag()
             .filter(function(event) {
-                // Linking modunda drag'ı engelle, sadece click çalışsın
                 if (self.linkingState) return false;
                 return !event.ctrlKey && !event.button;
+            })
+            .subject(function(event, d) {
+                // Mevcut pozisyonu subject olarak döndür → event.x/y buna göre hesaplanır
+                const pos = self._nodePositions.get(d.data.id);
+                return pos ? { x: pos.x, y: pos.y } : { x: d.x, y: d.y };
             })
             .on("start", function(event) {
                 d3.select(this).raise().classed("dragging", true);
             })
             .on("drag", function(event, d) {
-                d3.select(this).attr("transform", `translate(${event.x},${event.y})`);
+                // event.x/y artık subject'e göre doğru hesaplanıyor
+                const newX = event.x;
+                const newY = event.y;
+
+                // 1. DOM: düğümü anında taşı
+                d3.select(this).attr("transform", `translate(${newX},${newY})`);
+
+                // 2. Pozisyon map'ini güncelle
                 self._nodePositions.set(d.data.id, {
-                    x: event.x, y: event.y,
+                    x: newX, y: newY,
                     baseX: d.x, baseY: d.y
                 });
+
+                // 3. Bağlı çizgileri eş zamanlı güncelle
                 self.g.select(".links-layer").selectAll("path.dag-link")
                     .attr("d", linkD => {
                         const srcPos = self._nodePositions.get(linkD.source.data.id);
@@ -491,8 +504,10 @@ export class GraphRenderer {
             .on("end", function(event, d) {
                 d3.select(this).classed("dragging", false);
                 if (d.data.type === 'person') {
-                    const ox = event.x - d.x;
-                    const oy = event.y - d.y;
+                    // Offset = nihai pozisyon - sugiyama base pozisyonu
+                    const pos = self._nodePositions.get(d.data.id);
+                    const ox = pos ? pos.x - pos.baseX : 0;
+                    const oy = pos ? pos.y - pos.baseY : 0;
                     if (self.callbacks.onDragEnd) {
                         self.callbacks.onDragEnd(d.data.data.id, ox, oy);
                     }

@@ -153,8 +153,16 @@ export class DataManager {
 
     // İki kişi arasında evlilik döngü yaratır mı?
     wouldCreateCycle(personId1, personId2) {
-        // personId1 -> personId2'nin soyundan mı geliyor?
-        // VEYA personId2 -> personId1'in soyundan mı geliyor?
         return this.hasCycle(personId1, personId2) || this.hasCycle(personId2, personId1);
+    }
+
+    // Tüm offset'leri sıfırla → Sugiyama optimum konumlarına döndür
+    resetAllOffsets() {
+        this.executeTransaction(() => {
+            this.data.persons.forEach(p => {
+                p.offsetX = 0;
+                p.offsetY = 0;
+            });
+        });
     }
 }
