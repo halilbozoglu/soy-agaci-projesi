@@ -310,15 +310,18 @@ export class GraphRenderer {
             const layout = d3dag.sugiyama()
                 .nodeSize(n => {
                     if (!n || !n.data) return [0, 0];
-                    // Union: Devasa güvenli bölge → yanına kimse yaklaşamaz
-                    if (n.data.type === 'union') return [450, 300];
-                    if (n.data.type === 'dummy') return [50, 300];
+                    // Union: Katı sınır kutusu (2 eş + marjin = 600px).
+                    // Sugiyama bu alana başka düğüm yerleştirmez.
+                    if (n.data.type === 'union') return [600, 350];
+                    if (n.data.type === 'dummy') return [50, 350];
                     // Person: Dar yatay, geniş dikey
-                    return [220, 300];
+                    return [250, 350];
                 })
                 .layering(d3dag.layeringSimplex())
                 .decross(d3dag.decrossTwoLayer())
-                .coord(d3dag.coordQuad());
+                // coordGreedy: Alt-ağaçları (sülaleleri) izole tutar,
+                // merkeze agresif sıkıştırma yapmaz
+                .coord(d3dag.coordGreedy());
             layout(dagInfo);
         } catch(error) {
             console.error("DAG Layout Hatası:", error);
@@ -346,9 +349,9 @@ export class GraphRenderer {
             uNode.y = maxY;
         });
 
-        // 2b. X Kümeleme: Eşleri union merkezinin ±120px'ine sabitle
-        // Union 450px güvenli bölge içinde rahatça sığar (240 < 450)
-        const SPOUSE_HALF_GAP = 120;
+        // 2b. X Kümeleme: Eşleri Union merkezinin ±140px'ine sabitle
+        // Union 600px katı sınır → eşler (280px toplam) sınır içinde kalır
+        const SPOUSE_HALF_GAP = 140;
         data.unions.forEach(u => {
             const uNode = nodeById.get(`u_${u.id}`);
             if (!uNode) return;
@@ -357,10 +360,9 @@ export class GraphRenderer {
                 .filter(Boolean);
             if (partnerNodes.length !== 2) return;
 
-            const centerX = (partnerNodes[0].x + partnerNodes[1].x) / 2;
-            uNode.x = centerX;
-            partnerNodes[0].x = centerX - SPOUSE_HALF_GAP;
-            partnerNodes[1].x = centerX + SPOUSE_HALF_GAP;
+            // Union X'ini referans al (coordGreedy'nin hesapladığı değer)
+            partnerNodes[0].x = uNode.x - SPOUSE_HALF_GAP;
+            partnerNodes[1].x = uNode.x + SPOUSE_HALF_GAP;
         });
 
         // --- KALICI OFFSET UYGULAMA (Person + Union) ---
