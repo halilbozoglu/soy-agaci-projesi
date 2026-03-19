@@ -92,8 +92,8 @@ export class AppController {
         const submitBtn = document.getElementById('btn-submit-person');
         const formTitle = document.getElementById('form-person-title');
         submitBtn.textContent = 'Kişiyi Güncelle';
-        submitBtn.classList.remove('bg-blue-600', 'hover:bg-blue-700');
-        submitBtn.classList.add('bg-amber-600', 'hover:bg-amber-700');
+        submitBtn.classList.remove('btn-primary');
+        submitBtn.classList.add('btn-edit-mode');
         formTitle.textContent = '✏️ Kişiyi Düzenle';
 
         // İptal butonu göster
@@ -117,8 +117,8 @@ export class AppController {
         const submitBtn = document.getElementById('btn-submit-person');
         const formTitle = document.getElementById('form-person-title');
         submitBtn.textContent = 'Kişiyi Oluştur';
-        submitBtn.classList.remove('bg-amber-600', 'hover:bg-amber-700');
-        submitBtn.classList.add('bg-blue-600', 'hover:bg-blue-700');
+        submitBtn.classList.remove('btn-edit-mode');
+        submitBtn.classList.add('btn-primary');
         formTitle.textContent = 'Yeni Kişi Ekle';
 
         document.getElementById('btn-cancel-edit').classList.add('hidden');

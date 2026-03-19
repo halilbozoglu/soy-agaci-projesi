@@ -9,13 +9,168 @@ html, body {
   height: 100%;
 }
 
-/* D3-DAG node ve link animasyonları */
-svg path {
-  transition: all 0.3s ease-in-out;
+/* ======================== */
+/*  GLASSMORPHISM SIDEBAR   */
+/* ======================== */
+.sidebar-glass {
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.95) 0%, rgba(15, 23, 42, 0.98) 100%);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-right: 1px solid rgba(255,255,255,0.06);
+  box-shadow: 4px 0 24px rgba(0,0,0,0.3);
 }
-svg g {
-  transition: transform 0.3s ease-in-out;
+
+/* ======================== */
+/*  FORM GİRİŞ STİLLERİ    */
+/* ======================== */
+.form-card {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  padding: 16px;
+  backdrop-filter: blur(8px);
 }
-svg rect, svg circle {
-  transition: all 0.3s ease-in-out;
+
+.form-input {
+  width: 100%;
+  padding: 10px 14px;
+  font-size: 13px;
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 8px;
+  color: #e2e8f0;
+  outline: none;
+  transition: all 0.2s ease;
+}
+.form-input::placeholder {
+  color: #64748b;
+}
+.form-input:focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px rgba(99,102,241,0.25);
+  background: rgba(255,255,255,0.1);
+}
+.form-input option {
+  background: #1e293b;
+  color: #e2e8f0;
+}
+
+/* ======================== */
+/*  BUTON STİLLERİ          */
+/* ======================== */
+.btn-primary {
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 50%, #4338ca 100%);
+  color: white;
+  font-weight: 600;
+  padding: 10px 0;
+  border-radius: 10px;
+  font-size: 14px;
+  transition: all 0.25s ease;
+  box-shadow: 0 4px 14px rgba(99,102,241,0.35);
+  border: none;
+  cursor: pointer;
+}
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(99,102,241,0.45);
+  filter: brightness(1.1);
+}
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+.btn-secondary {
+  background: linear-gradient(135deg, #ec4899 0%, #db2777 100%);
+  color: white;
+  font-weight: 600;
+  padding: 10px 0;
+  border-radius: 10px;
+  font-size: 14px;
+  transition: all 0.25s ease;
+  box-shadow: 0 4px 14px rgba(236,72,153,0.3);
+  border: none;
+  cursor: pointer;
+}
+.btn-secondary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(236,72,153,0.4);
+  filter: brightness(1.1);
+}
+
+.btn-edit-mode {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  box-shadow: 0 4px 14px rgba(245,158,11,0.35);
+}
+
+/* ======================== */
+/*  CONTEXT MENÜ            */
+/* ======================== */
+.ctx-menu {
+  position: absolute;
+  background: rgba(15,23,42,0.95);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+  padding: 6px 0;
+  z-index: 50;
+  min-width: 170px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+  animation: ctx-appear 0.15s ease-out;
+}
+.ctx-menu-item {
+  width: 100%;
+  text-align: left;
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: #e2e8f0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.ctx-menu-item:hover {
+  background: rgba(255,255,255,0.08);
+}
+.ctx-menu-danger {
+  color: #fca5a5;
+}
+.ctx-menu-danger:hover {
+  background: rgba(239,68,68,0.15);
+}
+@keyframes ctx-appear {
+  from { opacity: 0; transform: scale(0.95) translateY(-4px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* ======================== */
+/*  SVG ANİMASYONLARI       */
+/* ======================== */
+.dag-link {
+  transition: stroke-opacity 0.2s ease;
+}
+.node-group {
+  transition: filter 0.2s ease;
+}
+.node-group:hover {
+  filter: brightness(1.05);
+}
+.node-group.dragging {
+  filter: brightness(1.1) drop-shadow(0 8px 16px rgba(0,0,0,0.2));
+  transition: none; /* sürükleme esnasında transition lag yaratmasın */
+}
+
+/* Scrollbar stili */
+aside::-webkit-scrollbar {
+  width: 4px;
+}
+aside::-webkit-scrollbar-track {
+  background: transparent;
+}
+aside::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.15);
+  border-radius: 4px;
 }

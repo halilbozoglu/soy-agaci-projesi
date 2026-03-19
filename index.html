@@ -4,79 +4,84 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Soy Ağacı Projesi</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
-<body class="bg-slate-100 text-slate-800 font-sans h-screen flex overflow-hidden">
-    <!-- Sol Menü: Formlar ve Yönetim -->
-    <aside class="w-80 bg-white shadow-2xl flex flex-col h-full overflow-y-auto z-10 p-5 border-r border-slate-200">
-        <h1 class="text-xl font-bold mb-5 text-slate-800 border-b pb-3">Aile Ağacı</h1>
+<body class="bg-slate-900 text-slate-100 font-sans h-screen flex overflow-hidden" style="font-family: 'Inter', sans-serif;">
+    <!-- Sol Menü: Glassmorphism Panel -->
+    <aside class="w-80 flex flex-col h-full overflow-y-auto z-10 p-5 sidebar-glass">
+        <h1 class="text-xl font-extrabold mb-5 text-white border-b border-white/10 pb-3 flex items-center gap-2">
+            <span class="text-2xl">🌳</span> Aile Ağacı
+        </h1>
         
         <div class="space-y-5">
             <!-- Global action butonları -->
             <div class="flex space-x-2">
-                <button id="btn-undo" class="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 py-2 rounded text-sm font-semibold transition-colors">Geri Al</button>
-                <button id="btn-clear" class="flex-1 bg-red-100 hover:bg-red-200 text-red-700 py-2 rounded text-sm font-semibold transition-colors">Sıfırla</button>
+                <button id="btn-undo" class="flex-1 bg-white/10 hover:bg-white/20 text-white py-2.5 rounded-lg text-sm font-semibold transition-all backdrop-blur-sm border border-white/10">↩ Geri Al</button>
+                <button id="btn-clear" class="flex-1 bg-red-500/20 hover:bg-red-500/30 text-red-300 py-2.5 rounded-lg text-sm font-semibold transition-all backdrop-blur-sm border border-red-500/20">🗑 Sıfırla</button>
             </div>
 
             <!-- Kişi Ekleme Formu -->
-            <div class="bg-slate-50 p-4 rounded-lg border border-slate-200 shadow-inner">
-                <h2 id="form-person-title" class="text-md font-bold text-slate-700 mb-3">Yeni Kişi Ekle</h2>
+            <div class="form-card">
+                <h2 id="form-person-title" class="text-md font-bold text-white mb-3">Yeni Kişi Ekle</h2>
                 <form id="form-person" class="space-y-3">
-                    <input type="text" id="p-ad" placeholder="Ad" required class="w-full px-3 py-2 text-sm border rounded focus:ring-2 focus:ring-blue-500 outline-none" />
-                    <input type="text" id="p-soyad" placeholder="Soyad" required class="w-full px-3 py-2 text-sm border rounded focus:ring-2 focus:ring-blue-500 outline-none" />
-                    <select id="p-cinsiyet" class="w-full px-3 py-2 text-sm border rounded focus:ring-2 focus:ring-blue-500 outline-none text-slate-600">
+                    <input type="text" id="p-ad" placeholder="Ad" required class="form-input" />
+                    <input type="text" id="p-soyad" placeholder="Soyad" required class="form-input" />
+                    <select id="p-cinsiyet" class="form-input">
                         <option value="Erkek">Erkek</option>
                         <option value="Kadın">Kadın</option>
                         <option value="Belirtilmemiş">Belirtilmemiş</option>
                     </select>
-                    <input type="text" id="p-tarih" placeholder="Doğum Tarihi (1990 vb.)" class="w-full px-3 py-2 text-sm border rounded focus:ring-2 focus:ring-blue-500 outline-none" />
-                    <input type="text" id="p-yakinlik" placeholder="Yakınlık (Serbest Metin)" class="w-full px-3 py-2 text-sm border rounded focus:ring-2 focus:ring-blue-500 outline-none" />
+                    <input type="text" id="p-tarih" placeholder="Doğum Tarihi (1990 vb.)" class="form-input" />
+                    <input type="text" id="p-yakinlik" placeholder="Yakınlık (Serbest Metin)" class="form-input" />
                     
                     <!-- Drag & Drop Fotoğraf -->
-                    <div id="drop-zone" class="border-2 border-dashed border-slate-300 rounded p-3 text-center text-xs text-slate-500 bg-white hover:bg-slate-100 transition-colors cursor-pointer">
-                        Fotoğraf Buraya Sürükle veya Seç
+                    <div id="drop-zone" class="border-2 border-dashed border-white/20 rounded-lg p-3 text-center text-xs text-slate-400 bg-white/5 hover:bg-white/10 transition-all cursor-pointer">
+                        📷 Fotoğraf Buraya Sürükle veya Seç
                         <input type="file" id="p-foto" class="hidden" accept="image/*" />
                     </div>
                     
                     <div id="preview-container" class="hidden justify-center my-1">
-                        <img id="img-preview" src="" alt="Önizleme" class="w-16 h-16 rounded-full object-cover border-2 border-slate-300" />
+                        <img id="img-preview" src="" alt="Önizleme" class="w-16 h-16 rounded-full object-cover border-2 border-indigo-400/50" />
                     </div>
 
-                    <button type="submit" id="btn-submit-person" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded text-sm transition-all shadow-sm">Kişiyi Oluştur</button>
-                    <button type="button" id="btn-cancel-edit" class="hidden w-full bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold py-2 rounded text-sm transition-all mt-1">İptal</button>
+                    <button type="submit" id="btn-submit-person" class="w-full btn-primary">Kişiyi Oluştur</button>
+                    <button type="button" id="btn-cancel-edit" class="hidden w-full bg-white/10 hover:bg-white/20 text-white font-semibold py-2.5 rounded-lg text-sm transition-all mt-1 border border-white/10">İptal</button>
                 </form>
             </div>
 
             <!-- Birliktelik (Makro) Formu -->
-            <div class="bg-slate-50 p-4 rounded-lg border border-slate-200 shadow-inner">
-                <h2 class="text-md font-bold text-slate-700 mb-2">Birliktelik Kur</h2>
-                <p class="text-[10px] text-slate-500 mb-3 font-medium">Listede yoksa bile otomatik kişi oluşturulup bağlanır.</p>
+            <div class="form-card">
+                <h2 class="text-md font-bold text-white mb-2">Birliktelik Kur</h2>
+                <p class="text-[10px] text-slate-400 mb-3 font-medium">Listede yoksa bile otomatik kişi oluşturulup bağlanır.</p>
                 <form id="form-union" class="space-y-3">
                     
                     <div>
-                        <label class="block text-xs font-semibold text-slate-600 mb-1">Ebeveyn / Partner 1</label>
-                        <input type="text" id="u-partner1" list="person-list" placeholder="İsim Girin..." required class="w-full px-3 py-2 text-sm border rounded focus:ring-2 focus:ring-pink-500 outline-none" />
+                        <label class="block text-xs font-semibold text-indigo-300 mb-1">👨 Baba</label>
+                        <input type="text" id="u-partner1" list="person-list" placeholder="Baba Adı Girin..." required class="form-input" />
                     </div>
                     
                     <div>
-                        <label class="block text-xs font-semibold text-slate-600 mb-1">Ebeveyn / Partner 2</label>
-                        <input type="text" id="u-partner2" list="person-list" placeholder="İsim Girin..." class="w-full px-3 py-2 text-sm border rounded focus:ring-2 focus:ring-pink-500 outline-none" />
+                        <label class="block text-xs font-semibold text-pink-300 mb-1">👩 Anne</label>
+                        <input type="text" id="u-partner2" list="person-list" placeholder="Anne Adı Girin..." class="form-input" />
                     </div>
 
                     <div>
-                        <label class="block text-xs font-semibold text-slate-600 mb-1">Çocuklar (Virgülle Ayırın)</label>
-                        <input type="text" id="u-children" placeholder="Çocuk 1, Çocuk 2..." class="w-full px-3 py-2 text-sm border rounded focus:ring-2 focus:ring-pink-500 outline-none" />
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">👶 Çocuklar (Virgülle Ayırın)</label>
+                        <input type="text" id="u-children" placeholder="Çocuk 1, Çocuk 2..." class="form-input" />
                     </div>
 
                     <datalist id="person-list"></datalist>
 
-                    <button type="submit" class="w-full bg-pink-600 hover:bg-pink-700 text-white font-semibold py-2 rounded text-sm transition-all shadow-sm">Bağlantıyı Kur</button>
+                    <button type="submit" class="w-full btn-secondary">Bağlantıyı Kur</button>
                 </form>
             </div>
         </div>
     </aside>
 
     <!-- Grafik Render Alanı -->
-    <main class="flex-1 h-full relative" id="graph-container">
+    <main class="flex-1 h-full relative bg-slate-50" id="graph-container">
         <!-- D3-DAG SVG burada render edilecek -->
     </main>
 
