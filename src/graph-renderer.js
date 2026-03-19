@@ -5,6 +5,8 @@ export class GraphRenderer {
     constructor(containerId, callbacks) {
         this.containerId = containerId;
         this.callbacks = callbacks || {};
+        this.isLinkingMode = false;
+        this._linkingSourcePerson = null;
         const container = document.getElementById(containerId);
         container.innerHTML = "";
         
@@ -80,7 +82,19 @@ export class GraphRenderer {
         
         this.svg.call(this.zoom);
         this.svg.on("dblclick.zoom", null);
-        this.svg.on("click", () => this.hideContextMenu());
+        this.svg.on("click", () => {
+            this.hideContextMenu();
+            if (this.isLinkingMode) {
+                this.cancelLinkingMode();
+            }
+        });
+
+        // ESC tuşu ile linking mode iptal
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && this.isLinkingMode) {
+                this.cancelLinkingMode();
+            }
+        });
 
         // İç referanslar (drag esnasında çizgileri güncellemek için)
         this._nodePositions = new Map();
@@ -102,8 +116,10 @@ export class GraphRenderer {
         
         const items = [
             { icon: '✏️', label: 'Düzenle', action: 'edit' },
-            { icon: '👆', label: 'Ebeveyn Ekle', action: 'addParent' },
+            { icon: '👨‍👩‍👧', label: 'Ebeveyn Ekle', action: 'addParent' },
             { icon: '👶', label: 'Çocuk Ekle', action: 'addChild' },
+            { icon: '💍', label: 'Eş/Partner Ekle', action: 'addPartner' },
+            { icon: '🔗', label: 'Başkasıyla Evlendir', action: 'startLinking' },
             { icon: '🗑️', label: 'Sil', action: 'delete', danger: true }
         ];
 
@@ -114,7 +130,9 @@ export class GraphRenderer {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 this.hideContextMenu();
-                if (this.callbacks[item.action]) {
+                if (item.action === 'startLinking') {
+                    this.enterLinkingMode(personData);
+                } else if (this.callbacks[item.action]) {
                     this.callbacks[item.action](personData);
                 }
             });
@@ -129,10 +147,41 @@ export class GraphRenderer {
         let top = event.clientY - containerRect.top + 10;
 
         if (left + 170 > containerRect.width) left = left - 180;
-        if (top + 160 > containerRect.height) top = top - 170;
+        if (top + 200 > containerRect.height) top = top - 210;
 
         menu.style.left = `${left}px`;
         menu.style.top = `${top}px`;
+    }
+
+    // --- LINKING MODE (Eşleştirme Modu) ---
+    enterLinkingMode(sourcePerson) {
+        this.isLinkingMode = true;
+        this._linkingSourcePerson = sourcePerson;
+        this.showToast(`🔗 "${sourcePerson.ad} ${sourcePerson.soyad}" için eşleştirilecek 2. kişiyi ağaçtan seçin...`, 'linking');
+        // SVG cursor değiştir
+        this.svg.style("cursor", "crosshair");
+    }
+
+    cancelLinkingMode() {
+        this.isLinkingMode = false;
+        this._linkingSourcePerson = null;
+        this.hideToast();
+        this.svg.style("cursor", null);
+    }
+
+    showToast(message, type) {
+        this.hideToast();
+        const container = document.getElementById(this.containerId);
+        const toast = document.createElement('div');
+        toast.id = 'linking-toast';
+        toast.className = `toast-notification ${type === 'linking' ? 'toast-linking' : ''}`;
+        toast.innerHTML = `<span>${message}</span><button class="toast-close" onclick="this.parentElement.remove()">✕</button>`;
+        container.appendChild(toast);
+    }
+
+    hideToast() {
+        const existing = document.getElementById('linking-toast');
+        if (existing) existing.remove();
     }
 
     _getCardFill(person) {
@@ -359,9 +408,28 @@ export class GraphRenderer {
             .attr("font-family", "'Inter', 'Segoe UI', sans-serif")
             .text(d => d.data.data.dogumTarihi || "");
 
-        // --- CONTEXT MENU ---
+        // --- CONTEXT MENU & LINKING MODE ---
         personGroups.on("click", function(event, d) {
             event.stopPropagation();
+
+            // Linking Mode aktifse: 2. kişi seçildi
+            if (self.isLinkingMode && self._linkingSourcePerson) {
+                const secondPerson = d.data.data;
+                const firstPerson = self._linkingSourcePerson;
+
+                if (firstPerson.id === secondPerson.id) {
+                    alert('Aynı kişiyi seçemezsiniz.');
+                    return;
+                }
+
+                self.cancelLinkingMode();
+                if (self.callbacks.linkTwoPersons) {
+                    self.callbacks.linkTwoPersons(firstPerson, secondPerson);
+                }
+                return;
+            }
+
+            // Normal mod: Context menü aç
             self.showContextMenu(event, d.data.data);
         });
 

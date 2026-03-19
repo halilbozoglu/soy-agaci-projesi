@@ -13,6 +13,8 @@ export class AppController {
             edit: (person) => this.enterEditMode(person),
             addParent: (person) => this.addParentFor(person),
             addChild: (person) => this.addChildFor(person),
+            addPartner: (person) => this.addPartnerFor(person),
+            linkTwoPersons: (p1, p2) => this.linkTwoPersons(p1, p2),
             delete: (person) => this.deletePersonWithConfirm(person),
             onDragEnd: (personId, ox, oy) => this.saveOffset(personId, ox, oy)
         });
@@ -132,31 +134,103 @@ export class AppController {
         }
     }
 
+    // --- 1. ÇİFT EBEVEYN EKLEME (DOUBLE NODE CREATION) ---
     addParentFor(person) {
-        const parentName = prompt(`"${person.ad} ${person.soyad}" için ebeveyn adı girin (Ad Soyad):`);
-        if (!parentName || parentName.trim() === '') return;
+        const babaName = prompt(`"${person.ad} ${person.soyad}" için Baba adı girin (Ad Soyad):`);
+        const anneName = prompt(`"${person.ad} ${person.soyad}" için Anne adı girin (Ad Soyad):`);
+
+        // Her ikisi de boşsa çık
+        if ((!babaName || babaName.trim() === '') && (!anneName || anneName.trim() === '')) return;
 
         this.dataManager.pushHistory();
         try {
-            const res = this.resolvePersonId(parentName);
-            let parentId;
+            const partnerIds = [];
+
+            // Baba işle
+            if (babaName && babaName.trim() !== '') {
+                const res = this.resolvePersonId(babaName);
+                if (typeof res === 'string') {
+                    partnerIds.push(res);
+                } else if (res && res.isNew) {
+                    res.person.cinsiyet = 'Erkek';
+                    this.dataManager.data.persons.push(res.person);
+                    partnerIds.push(res.person.id);
+                }
+            }
+
+            // Anne işle
+            if (anneName && anneName.trim() !== '') {
+                const res = this.resolvePersonId(anneName);
+                if (typeof res === 'string') {
+                    partnerIds.push(res);
+                } else if (res && res.isNew) {
+                    res.person.cinsiyet = 'Kadın';
+                    this.dataManager.data.persons.push(res.person);
+                    partnerIds.push(res.person.id);
+                }
+            }
+
+            if (partnerIds.length > 0) {
+                const newUnion = {
+                    id: Date.now().toString(36) + Math.random().toString(36).substr(2, 5),
+                    partnerIds: [...new Set(partnerIds)],
+                    childrenIds: [person.id]
+                };
+                this.dataManager.data.unions.push(newUnion);
+            }
+
+            this.dataManager.save();
+            this.render();
+        } catch (error) {
+            console.error("Ebeveyn ekleme hatası:", error);
+            this.dataManager.undo();
+        }
+    }
+
+    // --- 2. HIZLI EŞ / PARTNER EKLEME ---
+    addPartnerFor(person) {
+        const partnerName = prompt(`"${person.ad} ${person.soyad}" için eş/partner adı girin (Ad Soyad):`);
+        if (!partnerName || partnerName.trim() === '') return;
+
+        this.dataManager.pushHistory();
+        try {
+            const res = this.resolvePersonId(partnerName);
+            let partnerId;
             if (typeof res === 'string') {
-                parentId = res;
+                partnerId = res;
             } else if (res && res.isNew) {
                 this.dataManager.data.persons.push(res.person);
-                parentId = res.person.id;
+                partnerId = res.person.id;
             } else { return; }
 
             const newUnion = {
                 id: Date.now().toString(36) + Math.random().toString(36).substr(2, 5),
-                partnerIds: [parentId],
-                childrenIds: [person.id]
+                partnerIds: [person.id, partnerId],
+                childrenIds: []
             };
             this.dataManager.data.unions.push(newUnion);
             this.dataManager.save();
             this.render();
         } catch (error) {
-            console.error("Ebeveyn ekleme hatası:", error);
+            console.error("Partner ekleme hatası:", error);
+            this.dataManager.undo();
+        }
+    }
+
+    // --- 3. İKİ MEVCUT KİŞİYİ EVLENDİRME (LINKING MODE CALLBACK) ---
+    linkTwoPersons(person1, person2) {
+        this.dataManager.pushHistory();
+        try {
+            const newUnion = {
+                id: Date.now().toString(36) + Math.random().toString(36).substr(2, 5),
+                partnerIds: [person1.id, person2.id],
+                childrenIds: []
+            };
+            this.dataManager.data.unions.push(newUnion);
+            this.dataManager.save();
+            this.render();
+        } catch (error) {
+            console.error("Evlendirme hatası:", error);
             this.dataManager.undo();
         }
     }
