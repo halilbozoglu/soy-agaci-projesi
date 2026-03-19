@@ -400,16 +400,16 @@ export class GraphRenderer {
             const layout = d3dag.sugiyama()
                 .nodeSize(n => {
                     if (!n || !n.data) return [0, 0];
-                    // Union: Katı sınır kutusu (2 eş + marjin).
-                    if (n.data.type === 'union') return [500, 350];
-                    if (n.data.type === 'dummy') return [50, 350];
-                    // Person: Dar yatay → staggered dizilimle kompaktlaşır
-                    return [180, 350];
+                    // Union: Katı sınır kutusu (2 eş + marjin = 650px)
+                    if (n.data.type === 'union') return [650, 400];
+                    if (n.data.type === 'dummy') return [50, 400];
+                    // Person: Dar yatay, geniş dikey
+                    return [280, 400];
                 })
                 .layering(d3dag.layeringSimplex())
                 .decross(d3dag.decrossTwoLayer())
-                // coordCenter: Ağacı merkeze toplar, kuzenler savrulmaz
-                .coord(d3dag.coordCenter());
+                // coordGreedy: Alt-ağaçları izole tutar, kuzenler savrulmaz
+                .coord(d3dag.coordGreedy());
             layout(dagInfo);
         } catch(error) {
             console.error("DAG Layout Hatası:", error);
@@ -437,8 +437,9 @@ export class GraphRenderer {
             uNode.y = maxY;
         });
 
-        // 2b. X Kümeleme: Eşleri Union merkezinin ±120px'ine sabitle
-        const SPOUSE_HALF_GAP = 120;
+        // 2b. X Kümeleme: Eşleri Union merkezinin ±150px'ine sabitle
+        // Union 650px katı sınır → eşler (300px toplam) sınır içinde kalır
+        const SPOUSE_HALF_GAP = 150;
         data.unions.forEach(u => {
             const uNode = nodeById.get(`u_${u.id}`);
             if (!uNode) return;

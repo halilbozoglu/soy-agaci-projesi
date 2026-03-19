@@ -200,7 +200,7 @@ export class AppController {
             formFieldsHtml = `
                 <input type="text" id="pop-ad" placeholder="Ad${batchHint}" required class="form-input" value="${defaults.ad || ''}" />
                 <input type="text" id="pop-soyad" placeholder="Soyad" class="form-input" value="${defaults.soyad || ''}" />
-                <select id="pop-cinsiyet" class="form-input">
+                <select id="pop-cinsiyet" class="form-input" ${options.lockGender ? 'disabled' : ''}>
                     <option value="Erkek" ${defaults.cinsiyet === 'Erkek' ? 'selected' : ''}>Erkek</option>
                     <option value="Kadın" ${defaults.cinsiyet === 'Kadın' ? 'selected' : ''}>Kadın</option>
                     <option value="Belirtilmemiş" ${(!defaults.cinsiyet || defaults.cinsiyet === 'Belirtilmemiş') ? 'selected' : ''}>Belirtilmemiş</option>
@@ -254,7 +254,7 @@ export class AppController {
             const soyadEl = popover.querySelector('#pop-soyad');
             if (soyadEl) formData.soyad = soyadEl.value;
             const cinsiyetEl = popover.querySelector('#pop-cinsiyet');
-            if (cinsiyetEl) formData.cinsiyet = cinsiyetEl.value;
+            if (cinsiyetEl) formData.cinsiyet = cinsiyetEl.disabled ? (defaults.cinsiyet || cinsiyetEl.value) : cinsiyetEl.value;
             const tarihEl = popover.querySelector('#pop-tarih');
             if (tarihEl) formData.dogumTarihi = tarihEl.value;
             const yakinlikEl = popover.querySelector('#pop-yakinlik');
@@ -376,25 +376,29 @@ export class AppController {
 
     addPartnerFor(person, event) {
         const ev = event || this._lastContextEvent || { clientX: 400, clientY: 300 };
+        // Otomatik Eş Cinsiyet Tespiti: asıl kişinin cinsiyetinin tersini varsayılan yap
+        const oppositeGender = person.cinsiyet === 'Erkek' ? 'Kadın' : (person.cinsiyet === 'Kadın' ? 'Erkek' : 'Belirtilmemiş');
         this.showPopover(ev, `💍 "${person.ad}" için Eş/Partner Ekle`, (formData) => {
             if (!formData.ad || formData.ad.trim() === '') return;
             this.dataManager.pushHistory();
             try {
                 const id = this._generateId();
                 this.dataManager.data.persons.push({
-                    id, ad: formData.ad, soyad: formData.soyad || '',
+                    id, ad: this._toTitleCase(formData.ad), soyad: this._toTitleCase(formData.soyad || ''),
                     cinsiyet: formData.cinsiyet, dogumTarihi: formData.dogumTarihi || '',
-                    yakinlikDerecesi: '', fotograf: null, offsetX: 0, offsetY: 0
+                    yakinlikDerecesi: '', fotograf: null, offsetX: 0, offsetY: 0,
+                    isDeceased: false
                 });
                 this.dataManager.data.unions.push({
                     id: this._generateId(),
                     partnerIds: [person.id, id],
-                    childrenIds: []
+                    childrenIds: [],
+                    isDivorced: false, offsetX: 0, offsetY: 0
                 });
                 this.dataManager.save();
                 this.render();
             } catch (e) { console.error(e); this.dataManager.undo(); }
-        });
+        }, { cinsiyet: oppositeGender }, { lockGender: true });
     }
 
     addChildFor(person, event) {
