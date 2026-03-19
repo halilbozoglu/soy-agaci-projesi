@@ -19,7 +19,7 @@
 
             <!-- Kişi Ekleme Formu -->
             <div class="bg-slate-50 p-4 rounded-lg border border-slate-200 shadow-inner">
-                <h2 class="text-md font-bold text-slate-700 mb-3">Yeni Kişi Ekle</h2>
+                <h2 id="form-person-title" class="text-md font-bold text-slate-700 mb-3">Yeni Kişi Ekle</h2>
                 <form id="form-person" class="space-y-3">
                     <input type="text" id="p-ad" placeholder="Ad" required class="w-full px-3 py-2 text-sm border rounded focus:ring-2 focus:ring-blue-500 outline-none" />
                     <input type="text" id="p-soyad" placeholder="Soyad" required class="w-full px-3 py-2 text-sm border rounded focus:ring-2 focus:ring-blue-500 outline-none" />
@@ -41,7 +41,8 @@
                         <img id="img-preview" src="" alt="Önizleme" class="w-16 h-16 rounded-full object-cover border-2 border-slate-300" />
                     </div>
 
-                    <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded text-sm transition-all shadow-sm">Kişiyi Oluştur</button>
+                    <button type="submit" id="btn-submit-person" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 rounded text-sm transition-all shadow-sm">Kişiyi Oluştur</button>
+                    <button type="button" id="btn-cancel-edit" class="hidden w-full bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold py-2 rounded text-sm transition-all mt-1">İptal</button>
                 </form>
             </div>
 

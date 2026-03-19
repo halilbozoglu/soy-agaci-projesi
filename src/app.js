@@ -5,8 +5,17 @@ import { processImage } from './image-processor.js';
 export class AppController {
     constructor() {
         this.dataManager = new DataManager();
-        this.renderer = new GraphRenderer('graph-container');
         this.currentBase64Image = null;
+        this.editingPersonId = null; // Düzenleme modu: aktif kişi ID'si
+
+        // --- Context Menu Callback'leri ---
+        this.renderer = new GraphRenderer('graph-container', {
+            edit: (person) => this.enterEditMode(person),
+            addParent: (person) => this.addParentFor(person),
+            addChild: (person) => this.addChildFor(person),
+            delete: (person) => this.deletePersonWithConfirm(person),
+            onDragEnd: (personId, ox, oy) => this.saveOffset(personId, ox, oy)
+        });
     }
 
     init() {
@@ -33,7 +42,6 @@ export class AppController {
     resolvePersonId(inputValue) {
         if (!inputValue || inputValue.trim() === "") return null;
         
-        // "(ID)" formatında seçim yapıldıysa mevcut kişiyi dön
         const match = inputValue.match(/\((.*?)\)$/);
         const id = match ? match[1] : null;
 
@@ -41,7 +49,6 @@ export class AppController {
             return id;
         }
 
-        // On-the-fly oluşturma: Listede olmayan serbest isim yazıldıysa
         const parts = inputValue.trim().split(' ');
         const soyad = parts.length > 1 ? parts.pop() : '';
         const ad = parts.join(' ') || inputValue.trim();
@@ -54,14 +61,153 @@ export class AppController {
             cinsiyet: 'Belirtilmemiş',
             dogumTarihi: '',
             yakinlikDerecesi: 'Otomatik Eklendi',
-            fotograf: null
+            fotograf: null,
+            offsetX: 0,
+            offsetY: 0
         };
         
         return { isNew: true, person: newPerson };
     }
 
+    // --- 4. DÜZENLEME MODU (EDIT MODE) ---
+    enterEditMode(person) {
+        this.editingPersonId = person.id;
+
+        document.getElementById('p-ad').value = person.ad || '';
+        document.getElementById('p-soyad').value = person.soyad || '';
+        document.getElementById('p-cinsiyet').value = person.cinsiyet || 'Belirtilmemiş';
+        document.getElementById('p-tarih').value = person.dogumTarihi || '';
+        document.getElementById('p-yakinlik').value = person.yakinlikDerecesi || '';
+        
+        if (person.fotograf) {
+            this.currentBase64Image = person.fotograf;
+            const imgPreview = document.getElementById('img-preview');
+            const previewContainer = document.getElementById('preview-container');
+            imgPreview.src = person.fotograf;
+            previewContainer.classList.remove('hidden');
+            previewContainer.classList.add('flex');
+        }
+
+        // Buton ve başlığı güncelle
+        const submitBtn = document.getElementById('btn-submit-person');
+        const formTitle = document.getElementById('form-person-title');
+        submitBtn.textContent = 'Kişiyi Güncelle';
+        submitBtn.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+        submitBtn.classList.add('bg-amber-600', 'hover:bg-amber-700');
+        formTitle.textContent = '✏️ Kişiyi Düzenle';
+
+        // İptal butonu göster
+        document.getElementById('btn-cancel-edit').classList.remove('hidden');
+
+        // Sidebar'ı öne çıkar ve scrollla
+        document.getElementById('p-ad').focus();
+    }
+
+    exitEditMode() {
+        this.editingPersonId = null;
+
+        const form = document.getElementById('form-person');
+        form.reset();
+        this.currentBase64Image = null;
+        
+        const previewContainer = document.getElementById('preview-container');
+        previewContainer.classList.add('hidden');
+        previewContainer.classList.remove('flex');
+
+        const submitBtn = document.getElementById('btn-submit-person');
+        const formTitle = document.getElementById('form-person-title');
+        submitBtn.textContent = 'Kişiyi Oluştur';
+        submitBtn.classList.remove('bg-amber-600', 'hover:bg-amber-700');
+        submitBtn.classList.add('bg-blue-600', 'hover:bg-blue-700');
+        formTitle.textContent = 'Yeni Kişi Ekle';
+
+        document.getElementById('btn-cancel-edit').classList.add('hidden');
+    }
+
+    // --- CONTEXT MENU ACTIONS ---
+    deletePersonWithConfirm(person) {
+        if (confirm(`"${person.ad} ${person.soyad}" kişisini ve tüm bağlantılarını silmek istediğinize emin misiniz?`)) {
+            this.dataManager.deletePerson(person.id);
+            this.render();
+        }
+    }
+
+    addParentFor(person) {
+        const parentName = prompt(`"${person.ad} ${person.soyad}" için ebeveyn adı girin (Ad Soyad):`);
+        if (!parentName || parentName.trim() === '') return;
+
+        this.dataManager.pushHistory();
+        try {
+            const res = this.resolvePersonId(parentName);
+            let parentId;
+            if (typeof res === 'string') {
+                parentId = res;
+            } else if (res && res.isNew) {
+                this.dataManager.data.persons.push(res.person);
+                parentId = res.person.id;
+            } else { return; }
+
+            const newUnion = {
+                id: Date.now().toString(36) + Math.random().toString(36).substr(2, 5),
+                partnerIds: [parentId],
+                childrenIds: [person.id]
+            };
+            this.dataManager.data.unions.push(newUnion);
+            this.dataManager.save();
+            this.render();
+        } catch (error) {
+            console.error("Ebeveyn ekleme hatası:", error);
+            this.dataManager.undo();
+        }
+    }
+
+    addChildFor(person) {
+        const childName = prompt(`"${person.ad} ${person.soyad}" için çocuk adı girin (Ad Soyad):`);
+        if (!childName || childName.trim() === '') return;
+
+        this.dataManager.pushHistory();
+        try {
+            const res = this.resolvePersonId(childName);
+            let childId;
+            if (typeof res === 'string') {
+                childId = res;
+            } else if (res && res.isNew) {
+                this.dataManager.data.persons.push(res.person);
+                childId = res.person.id;
+            } else { return; }
+
+            // Kişinin mevcut bir union'ında çocuk olarak ekle, yoksa yeni oluştur
+            const existingUnion = this.dataManager.data.unions.find(u => u.partnerIds.includes(person.id));
+            if (existingUnion) {
+                existingUnion.childrenIds.push(childId);
+            } else {
+                const newUnion = {
+                    id: Date.now().toString(36) + Math.random().toString(36).substr(2, 5),
+                    partnerIds: [person.id],
+                    childrenIds: [childId]
+                };
+                this.dataManager.data.unions.push(newUnion);
+            }
+            this.dataManager.save();
+            this.render();
+        } catch (error) {
+            console.error("Çocuk ekleme hatası:", error);
+            this.dataManager.undo();
+        }
+    }
+
+    // --- 2. DRAG OFFSET KAYDETME ---
+    saveOffset(personId, ox, oy) {
+        const person = this.dataManager.getPerson(personId);
+        if (person) {
+            person.offsetX = ox;
+            person.offsetY = oy;
+            this.dataManager.save();
+        }
+    }
+
     bindEvents() {
-        // Drag & Drop
+        // Drag & Drop (Fotoğraf)
         const dropZone = document.getElementById('drop-zone');
         const fileInput = document.getElementById('p-foto');
         const previewContainer = document.getElementById('preview-container');
@@ -101,27 +247,50 @@ export class AppController {
             handleFile(e.target.files[0]);
         });
 
-        // Yeni Kişi Ekleme
+        // --- Kişi Ekleme / Güncelleme FORMU ---
         document.getElementById('form-person').addEventListener('submit', (e) => {
             e.preventDefault();
             
-            const newPerson = {
-                id: Date.now().toString(36) + Math.random().toString(36).substr(2, 5),
-                ad: document.getElementById('p-ad').value,
-                soyad: document.getElementById('p-soyad').value,
-                cinsiyet: document.getElementById('p-cinsiyet').value,
-                dogumTarihi: document.getElementById('p-tarih').value,
-                yakinlikDerecesi: document.getElementById('p-yakinlik').value,
-                fotograf: this.currentBase64Image
-            };
+            if (this.editingPersonId) {
+                // GÜNCELLEME MODU
+                const updates = {
+                    ad: document.getElementById('p-ad').value,
+                    soyad: document.getElementById('p-soyad').value,
+                    cinsiyet: document.getElementById('p-cinsiyet').value,
+                    dogumTarihi: document.getElementById('p-tarih').value,
+                    yakinlikDerecesi: document.getElementById('p-yakinlik').value,
+                    fotograf: this.currentBase64Image
+                };
+                this.dataManager.updatePerson(this.editingPersonId, updates);
+                this.exitEditMode();
+                this.render();
+            } else {
+                // YENİ KİŞİ EKLEME MODU
+                const newPerson = {
+                    id: Date.now().toString(36) + Math.random().toString(36).substr(2, 5),
+                    ad: document.getElementById('p-ad').value,
+                    soyad: document.getElementById('p-soyad').value,
+                    cinsiyet: document.getElementById('p-cinsiyet').value,
+                    dogumTarihi: document.getElementById('p-tarih').value,
+                    yakinlikDerecesi: document.getElementById('p-yakinlik').value,
+                    fotograf: this.currentBase64Image,
+                    offsetX: 0,
+                    offsetY: 0
+                };
 
-            this.dataManager.addPerson(newPerson);
-            this.render();
-            
-            e.target.reset();
-            this.currentBase64Image = null;
-            previewContainer.classList.add('hidden');
-            previewContainer.classList.remove('flex');
+                this.dataManager.addPerson(newPerson);
+                this.render();
+                
+                e.target.reset();
+                this.currentBase64Image = null;
+                previewContainer.classList.add('hidden');
+                previewContainer.classList.remove('flex');
+            }
+        });
+
+        // İptal butonu
+        document.getElementById('btn-cancel-edit').addEventListener('click', () => {
+            this.exitEditMode();
         });
 
         // Birliktelik (Union) Ekleme & On-The-Fly Makro
@@ -132,7 +301,6 @@ export class AppController {
             const p2Val = document.getElementById('u-partner2').value;
             const childVal = document.getElementById('u-children').value;
 
-            // Güvenli Batch İşlem başlat
             this.dataManager.pushHistory();
 
             try {
@@ -145,7 +313,7 @@ export class AppController {
                     if (typeof res === 'string') {
                         targetArray.push(res);
                     } else if (res.isNew) {
-                        this.dataManager.data.persons.push(res.person); // Batch içinde arka planda ekle
+                        this.dataManager.data.persons.push(res.person);
                         targetArray.push(res.person.id);
                     }
                 };
@@ -172,7 +340,7 @@ export class AppController {
                 e.target.reset();
             } catch (error) {
                 console.error("Batch Transaction Hatası:", error);
-                this.dataManager.undo(); // Hata durumunda rollback
+                this.dataManager.undo();
                 alert("Bağlantı işlemi sırasında bir hata oluştu ve geri alındı.");
             }
         });
