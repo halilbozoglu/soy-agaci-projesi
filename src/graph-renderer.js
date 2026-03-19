@@ -5,8 +5,12 @@ export class GraphRenderer {
     constructor(containerId, callbacks) {
         this.containerId = containerId;
         this.callbacks = callbacks || {};
-        this.isLinkingMode = false;
+
+        // --- FSM Linking State ---
+        this.linkingState = null; // null | 'SPOUSE' | 'CHILD' | 'SIBLING'
         this._linkingSourcePerson = null;
+        this._linkingTargetUnionId = null; // CHILD/SIBLING modları için hedef union
+
         const container = document.getElementById(containerId);
         container.innerHTML = "";
         
@@ -28,6 +32,18 @@ export class GraphRenderer {
             .attr("dx", "0").attr("dy", "3")
             .attr("stdDeviation", "6")
             .attr("flood-color", "rgba(15,23,42,0.12)");
+
+        // Linking mode hover glow
+        const linkGlow = defs.append("filter")
+            .attr("id", "linking-glow")
+            .attr("x", "-30%").attr("y", "-30%")
+            .attr("width", "160%").attr("height", "160%");
+        linkGlow.append("feGaussianBlur")
+            .attr("stdDeviation", "4")
+            .attr("result", "blur");
+        const lgMerge = linkGlow.append("feMerge");
+        lgMerge.append("feMergeNode").attr("in", "blur");
+        lgMerge.append("feMergeNode").attr("in", "SourceGraphic");
 
         // Erkek kart gradient
         const maleGrad = defs.append("linearGradient")
@@ -64,16 +80,48 @@ export class GraphRenderer {
         this.svg.on("dblclick.zoom", null);
         this.svg.on("click", () => {
             this.hideContextMenu();
-            if (this.isLinkingMode) this.cancelLinkingMode();
+            if (this.linkingState) this.cancelLinkingMode();
         });
 
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && this.isLinkingMode) this.cancelLinkingMode();
+            if (e.key === 'Escape' && this.linkingState) this.cancelLinkingMode();
         });
 
         this._nodePositions = new Map();
         this._linkData = [];
         this._lineFn = d3.line().curve(d3.curveMonotoneY).x(d => d.x).y(d => d.y);
+    }
+
+    // --- Linking Mode API (FSM) ---
+    get isLinkingMode() { return this.linkingState !== null; }
+
+    enterLinkingMode(sourcePerson, mode, targetUnionId) {
+        this.linkingState = mode; // 'SPOUSE' | 'CHILD' | 'SIBLING'
+        this._linkingSourcePerson = sourcePerson;
+        this._linkingTargetUnionId = targetUnionId || null;
+
+        const modeLabels = {
+            'SPOUSE': '💍 Evlendirmek',
+            'CHILD': '👶 Çocuk yapmak',
+            'SIBLING': '🧑‍🤝‍🧑 Kardeş yapmak'
+        };
+        const label = modeLabels[mode] || 'Bağlamak';
+        this.showToast(`🔗 "${sourcePerson.ad} ${sourcePerson.soyad}" → ${label} için 2. kişiyi ağaçtan seçin... (ESC ile iptal)`, 'linking');
+        this.svg.style("cursor", "crosshair");
+
+        // Linking modunda kişi kartlarına hover glow ekle
+        this.g.selectAll(".node-type-person")
+            .classed("linking-candidate", true);
+    }
+
+    cancelLinkingMode() {
+        this.linkingState = null;
+        this._linkingSourcePerson = null;
+        this._linkingTargetUnionId = null;
+        this.hideToast();
+        this.svg.style("cursor", null);
+        this.g.selectAll(".node-type-person")
+            .classed("linking-candidate", false);
     }
 
     hideContextMenu() {
@@ -94,19 +142,32 @@ export class GraphRenderer {
             { icon: '👶', label: 'Çocuk Ekle', action: 'addChild' },
             { icon: '🧑‍🤝‍🧑', label: 'Kardeş Ekle', action: 'addSibling' },
             { icon: '💍', label: 'Eş/Partner Ekle', action: 'addPartner' },
-            { icon: '🔗', label: 'Başkasıyla Evlendir', action: 'startLinking' },
+            { sep: true },
+            { icon: '🔗', label: 'Başkasıyla Evlendir', action: 'startLinkSpouse' },
+            { icon: '🔗', label: 'Mevcut Kişiyi Çocuk Yap', action: 'startLinkChild' },
+            { icon: '🔗', label: 'Mevcut Kişiyi Kardeş Yap', action: 'startLinkSibling' },
+            { sep: true },
             { icon: '🗑️', label: 'Sil', action: 'delete', danger: true }
         ];
 
         items.forEach(item => {
+            if (item.sep) {
+                const sep = document.createElement('div');
+                sep.className = 'ctx-menu-sep';
+                menu.appendChild(sep);
+                return;
+            }
             const btn = document.createElement('button');
             btn.className = `ctx-menu-item ${item.danger ? 'ctx-menu-danger' : ''}`;
             btn.innerHTML = `<span>${item.icon}</span><span>${item.label}</span>`;
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 this.hideContextMenu();
-                if (item.action === 'startLinking') {
-                    this.enterLinkingMode(personData);
+                // FSM Linking butonları
+                if (item.action === 'startLinkSpouse' || item.action === 'startLinkChild' || item.action === 'startLinkSibling') {
+                    if (this.callbacks.startLinkingFSM) {
+                        this.callbacks.startLinkingFSM(personData, item.action, event);
+                    }
                 } else if (this.callbacks[item.action]) {
                     if (this.callbacks._setLastEvent) this.callbacks._setLastEvent(event);
                     this.callbacks[item.action](personData, event);
@@ -121,24 +182,10 @@ export class GraphRenderer {
         const containerRect = container.getBoundingClientRect();
         let left = event.clientX - containerRect.left + 10;
         let top = event.clientY - containerRect.top + 10;
-        if (left + 180 > containerRect.width) left = left - 190;
-        if (top + 260 > containerRect.height) top = top - 270;
+        if (left + 200 > containerRect.width) left = left - 210;
+        if (top + 350 > containerRect.height) top = top - 360;
         menu.style.left = `${left}px`;
         menu.style.top = `${top}px`;
-    }
-
-    // --- LINKING MODE ---
-    enterLinkingMode(sourcePerson) {
-        this.isLinkingMode = true;
-        this._linkingSourcePerson = sourcePerson;
-        this.showToast(`🔗 "${sourcePerson.ad} ${sourcePerson.soyad}" için eşleştirilecek 2. kişiyi ağaçtan seçin...`, 'linking');
-        this.svg.style("cursor", "crosshair");
-    }
-    cancelLinkingMode() {
-        this.isLinkingMode = false;
-        this._linkingSourcePerson = null;
-        this.hideToast();
-        this.svg.style("cursor", null);
     }
 
     showToast(message, type) {
@@ -149,9 +196,7 @@ export class GraphRenderer {
         toast.className = `toast-notification ${type === 'linking' ? 'toast-linking' : ''} ${type === 'error' ? 'toast-error' : ''}`;
         toast.innerHTML = `<span>${message}</span><button class="toast-close" onclick="this.parentElement.remove()">✕</button>`;
         container.appendChild(toast);
-        if (type === 'error') {
-            setTimeout(() => this.hideToast(), 4000);
-        }
+        if (type === 'error') setTimeout(() => this.hideToast(), 4000);
     }
     hideToast() {
         const existing = document.getElementById('linking-toast');
@@ -181,26 +226,27 @@ export class GraphRenderer {
         const data = dataManager.data;
         if (data.persons.length === 0) return;
 
+        // --- 1. DETERMİNİSTİK SIRALAMA ---
         const nodes = [];
-        data.persons.forEach(p => {
+        [...data.persons].sort((a, b) => a.id.localeCompare(b.id)).forEach(p => {
             nodes.push({ id: `p_${p.id}`, type: 'person', data: p });
         });
-        data.unions.forEach(u => {
+        [...data.unions].sort((a, b) => a.id.localeCompare(b.id)).forEach(u => {
             nodes.push({ id: `u_${u.id}`, type: 'union', data: u });
         });
 
         const links = [];
-        data.unions.forEach(u => {
+        [...data.unions].sort((a, b) => a.id.localeCompare(b.id)).forEach(u => {
             const uId = `u_${u.id}`;
-            u.partnerIds.forEach(pId => {
+            [...u.partnerIds].sort().forEach(pId => {
                 links.push({ source: `p_${pId}`, target: uId });
             });
-            u.childrenIds.forEach(cId => {
+            [...u.childrenIds].sort().forEach(cId => {
                 links.push({ source: uId, target: `p_${cId}` });
             });
         });
 
-        // --- VERİ TEMİZLİĞİ VE SANAL KÖK ---
+        // --- SANAL KÖK ---
         const nodeIds = new Set(nodes.map(n => n.id));
         const DUMMY_ROOT_ID = 'virtual_dummy_root';
         nodes.push({ id: DUMMY_ROOT_ID, type: 'dummy', data: { ad: '', soyad: '', cinsiyet: '', dogumTarihi: '', yakinlikDerecesi: '', fotograf: null } });
@@ -213,6 +259,8 @@ export class GraphRenderer {
             parents = parents.filter(pId => pId && nodeIds.has(pId));
             parentMap.set(node.id, parents);
         });
+        // Deterministik sıralama: nodes'u id'ye göre sırala
+        nodes.sort((a, b) => a.id.localeCompare(b.id));
         nodes.forEach(node => {
             if (node.id === DUMMY_ROOT_ID) return;
             const parents = parentMap.get(node.id);
@@ -243,6 +291,7 @@ export class GraphRenderer {
             return;
         }
 
+        // --- KALICI OFFSET UYGULAMA ---
         const allDescendants = dagInfo.descendants();
         allDescendants.forEach(d => {
             if (d.data.id === DUMMY_ROOT_ID) return;
@@ -251,7 +300,7 @@ export class GraphRenderer {
             this._nodePositions.set(d.data.id, { x: d.x + ox, y: d.y + oy, baseX: d.x, baseY: d.y });
         });
 
-        // --- LINK ÇİZİMİ (soluk gri/beyaz, hover'da parlak) ---
+        // --- LINK ÇİZİMİ ---
         const dagLinks = dagInfo.links().filter(d => d.source.data.id !== DUMMY_ROOT_ID);
         this._linkData = dagLinks;
 
@@ -288,7 +337,7 @@ export class GraphRenderer {
                 return pos ? `translate(${pos.x},${pos.y})` : `translate(${d.x},${d.y})`;
             });
 
-        // --- UNION düğümleri (zarif, küçük) ---
+        // Union düğümleri
         const unionGroups = nodeGroup.filter(d => d.data.type === 'union');
         unionGroups.append("circle")
             .attr("r", 6)
@@ -298,14 +347,14 @@ export class GraphRenderer {
             .attr("opacity", 0.8)
             .style("cursor", "default");
 
-        // --- PERSON düğümleri ---
+        // Person düğümleri
         const personGroups = nodeGroup.filter(d => d.data.type === 'person');
         const cardWidth = 170;
         const cardHeight = 90;
         const self = this;
 
-        // Kart arka planı
         personGroups.append("rect")
+            .attr("class", "card-bg")
             .attr("x", -cardWidth/2)
             .attr("y", -cardHeight/2)
             .attr("width", cardWidth)
@@ -317,110 +366,111 @@ export class GraphRenderer {
             .style("cursor", "pointer")
             .style("filter", "url(#card-shadow)");
 
-        // Cinsiyet ikonu
         personGroups.append("circle")
-            .attr("cx", -cardWidth/2 + 14)
-            .attr("cy", -cardHeight/2 + 14)
-            .attr("r", 8)
+            .attr("cx", -cardWidth/2 + 14).attr("cy", -cardHeight/2 + 14).attr("r", 8)
             .attr("fill", d => d.data.data.cinsiyet === 'Erkek' ? '#3b82f6' : d.data.data.cinsiyet === 'Kadın' ? '#ec4899' : '#94a3b8')
             .attr("opacity", 0.8);
         personGroups.append("text")
-            .attr("x", -cardWidth/2 + 14)
-            .attr("y", -cardHeight/2 + 14)
-            .attr("text-anchor", "middle")
-            .attr("dy", "0.35em")
-            .attr("fill", "white")
-            .attr("font-size", "9px")
+            .attr("x", -cardWidth/2 + 14).attr("y", -cardHeight/2 + 14)
+            .attr("text-anchor", "middle").attr("dy", "0.35em").attr("fill", "white").attr("font-size", "9px")
             .text(d => d.data.data.cinsiyet === 'Erkek' ? '♂' : d.data.data.cinsiyet === 'Kadın' ? '♀' : '?');
 
-        // Fotoğraf
         personGroups.append("image")
-            .attr("x", -cardWidth/2 + 10)
-            .attr("y", -cardHeight/2 + 26)
-            .attr("width", 38)
-            .attr("height", 38)
+            .attr("x", -cardWidth/2 + 10).attr("y", -cardHeight/2 + 26)
+            .attr("width", 38).attr("height", 38)
             .attr("href", d => d.data.data.fotograf || "")
             .attr("clip-path", d => `circle(19px at ${-cardWidth/2 + 29}px ${-cardHeight/2 + 45}px)`)
             .style("display", d => d.data.data.fotograf ? "block" : "none");
 
-        // İsim ve detay (renk kodlu)
         const nameXOffset = d => d.data.data.fotograf ? -cardWidth/2 + 56 : 0;
         const alignOpts = d => d.data.data.fotograf ? "start" : "middle";
 
         personGroups.append("text")
-            .attr("x", nameXOffset)
-            .attr("y", -6)
+            .attr("x", nameXOffset).attr("y", -6)
             .attr("text-anchor", alignOpts)
             .attr("fill", d => self._getNameColor(d.data.data))
-            .attr("font-size", "14px")
-            .attr("font-weight", "700")
+            .attr("font-size", "14px").attr("font-weight", "700")
             .attr("font-family", "'Inter', 'Segoe UI', sans-serif")
             .text(d => `${d.data.data.ad} ${d.data.data.soyad}`);
             
         personGroups.append("text")
-            .attr("x", nameXOffset)
-            .attr("y", 12)
-            .attr("text-anchor", alignOpts)
-            .attr("fill", "#6366f1")
-            .attr("font-size", "11px")
-            .attr("font-weight", "500")
+            .attr("x", nameXOffset).attr("y", 12)
+            .attr("text-anchor", alignOpts).attr("fill", "#6366f1")
+            .attr("font-size", "11px").attr("font-weight", "500")
             .attr("font-family", "'Inter', 'Segoe UI', sans-serif")
             .text(d => d.data.data.yakinlikDerecesi || "");
 
         personGroups.append("text")
-            .attr("x", nameXOffset)
-            .attr("y", 26)
-            .attr("text-anchor", alignOpts)
-            .attr("fill", "#94a3b8")
+            .attr("x", nameXOffset).attr("y", 26)
+            .attr("text-anchor", alignOpts).attr("fill", "#94a3b8")
             .attr("font-size", "10px")
             .attr("font-family", "'Inter', 'Segoe UI', sans-serif")
             .text(d => d.data.data.dogumTarihi || "");
 
-        // --- HOVER: Bağlı çizgiler parlasın ---
+        // --- HOVER: Bağlı çizgiler parlasın + Linking mode glow ---
         personGroups.on("mouseenter", function(event, d) {
             const nodeId = d.data.id;
             linksLayer.selectAll("path.dag-link")
-                .attr("stroke-opacity", linkD => {
-                    if (linkD.source.data.id === nodeId || linkD.target.data.id === nodeId) return 1;
-                    return 0.15;
-                })
-                .attr("stroke", linkD => {
-                    if (linkD.source.data.id === nodeId || linkD.target.data.id === nodeId) return '#ffffff';
-                    return '#94a3b8';
-                })
-                .attr("stroke-width", linkD => {
-                    if (linkD.source.data.id === nodeId || linkD.target.data.id === nodeId) return 3;
-                    return 2;
-                });
+                .attr("stroke-opacity", linkD => (linkD.source.data.id === nodeId || linkD.target.data.id === nodeId) ? 1 : 0.12)
+                .attr("stroke", linkD => (linkD.source.data.id === nodeId || linkD.target.data.id === nodeId) ? '#ffffff' : '#94a3b8')
+                .attr("stroke-width", linkD => (linkD.source.data.id === nodeId || linkD.target.data.id === nodeId) ? 3 : 2);
+
+            // Linking mode: yeşil glow
+            if (self.linkingState && self._linkingSourcePerson && self._linkingSourcePerson.id !== d.data.data.id) {
+                d3.select(this).select(".card-bg")
+                    .attr("stroke", "#22c55e")
+                    .attr("stroke-width", 3)
+                    .style("filter", "url(#linking-glow)");
+            }
         });
-        personGroups.on("mouseleave", function() {
+        personGroups.on("mouseleave", function(event, d) {
             linksLayer.selectAll("path.dag-link")
                 .attr("stroke-opacity", 0.35)
                 .attr("stroke", "#94a3b8")
                 .attr("stroke-width", 2);
+
+            // Linking glow reset
+            if (self.linkingState) {
+                d3.select(this).select(".card-bg")
+                    .attr("stroke", self._getCardStroke(d.data.data))
+                    .attr("stroke-width", 2)
+                    .style("filter", "url(#card-shadow)");
+            }
         });
 
-        // --- CONTEXT MENU & LINKING MODE ---
+        // --- CLICK: Context Menu vs Linking Mode (İZOLE) ---
         personGroups.on("click", function(event, d) {
             event.stopPropagation();
-            if (self.isLinkingMode && self._linkingSourcePerson) {
+
+            // Linking Mode aktifse: context menu AÇILMAZ
+            if (self.linkingState && self._linkingSourcePerson) {
                 const secondPerson = d.data.data;
                 const firstPerson = self._linkingSourcePerson;
                 if (firstPerson.id === secondPerson.id) {
                     self.showToast('⚠️ Aynı kişiyi seçemezsiniz.', 'error');
                     return;
                 }
+                const currentState = self.linkingState;
+                const targetUnionId = self._linkingTargetUnionId;
                 self.cancelLinkingMode();
-                if (self.callbacks.linkTwoPersons) {
-                    self.callbacks.linkTwoPersons(firstPerson, secondPerson);
+
+                if (self.callbacks.onLinkingComplete) {
+                    self.callbacks.onLinkingComplete(firstPerson, secondPerson, currentState, targetUnionId);
                 }
                 return;
             }
+
+            // Normal mod: Context menü aç
             self.showContextMenu(event, d.data.data);
         });
 
-        // --- DRAG & DROP ---
+        // --- DRAG & DROP (click/drag izolasyonu: filter ile) ---
         const dragBehavior = d3.drag()
+            .filter(function(event) {
+                // Linking modunda drag'ı engelle, sadece click çalışsın
+                if (self.linkingState) return false;
+                return !event.ctrlKey && !event.button;
+            })
             .on("start", function(event) {
                 d3.select(this).raise().classed("dragging", true);
             })
