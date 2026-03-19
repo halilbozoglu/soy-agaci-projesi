@@ -310,8 +310,11 @@ export class GraphRenderer {
             const layout = d3dag.sugiyama()
                 .nodeSize(n => {
                     if (!n || !n.data) return [0, 0];
-                    if (n.data.type === 'union' || n.data.type === 'dummy') return [50, 140];
-                    return [350, 280];
+                    // Union: Devasa güvenli bölge → yanına kimse yaklaşamaz
+                    if (n.data.type === 'union') return [450, 300];
+                    if (n.data.type === 'dummy') return [50, 300];
+                    // Person: Dar yatay, geniş dikey
+                    return [220, 300];
                 })
                 .layering(d3dag.layeringSimplex())
                 .decross(d3dag.decrossTwoLayer())
@@ -343,8 +346,9 @@ export class GraphRenderer {
             uNode.y = maxY;
         });
 
-        // 2b. X Kümeleme: Eşleri union merkezinin ±80px'ine sabitle
-        const SPOUSE_HALF_GAP = 80;
+        // 2b. X Kümeleme: Eşleri union merkezinin ±120px'ine sabitle
+        // Union 450px güvenli bölge içinde rahatça sığar (240 < 450)
+        const SPOUSE_HALF_GAP = 120;
         data.unions.forEach(u => {
             const uNode = nodeById.get(`u_${u.id}`);
             if (!uNode) return;
