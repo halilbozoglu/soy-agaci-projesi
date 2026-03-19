@@ -157,6 +157,15 @@ export class DataManager {
     }
 
     // Tüm offset'leri sıfırla → Sugiyama optimum konumlarına döndür
+    // Tüm yakınlık derecelerini temizle
+    clearAllYakinlik() {
+        this.executeTransaction(() => {
+            this.data.persons.forEach(p => {
+                p.yakinlikDerecesi = '';
+            });
+        });
+    }
+
     resetAllOffsets() {
         this.executeTransaction(() => {
             this.data.persons.forEach(p => {

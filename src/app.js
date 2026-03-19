@@ -58,6 +58,12 @@ export class AppController {
         return Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
     }
 
+    // Title Case: Her kelimenin ilk harfi büyük
+    _toTitleCase(str) {
+        if (!str) return '';
+        return str.trim().split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+    }
+
     // ============================================================
     // FSM LINKING: Context Menu'den mod başlatma
     // ============================================================
@@ -187,7 +193,6 @@ export class AppController {
 
         const batchHint = options.batchMode ? ' (virgülle ayırarak birden fazla)' : '';
 
-        // unionSelectOnly modunda sadece union seçici göster
         let formFieldsHtml = '';
         if (!options.unionSelectOnly) {
             formFieldsHtml = `
@@ -199,10 +204,11 @@ export class AppController {
                     <option value="Belirtilmemiş" ${(!defaults.cinsiyet || defaults.cinsiyet === 'Belirtilmemiş') ? 'selected' : ''}>Belirtilmemiş</option>
                 </select>
                 <input type="text" id="pop-tarih" placeholder="Doğum Tarihi" class="form-input" value="${defaults.dogumTarihi || ''}" />
+                <input type="text" id="pop-yakinlik" placeholder="Yakınlık Derecesi" class="form-input" value="${defaults.yakinlikDerecesi || ''}" />
             `;
         }
 
-        const submitLabel = options.unionSelectOnly ? 'Seç ve Devam Et' : 'Ekle ve Bağla';
+        const submitLabel = options.editMode ? 'Güncelle' : (options.unionSelectOnly ? 'Seç ve Devam Et' : 'Ekle ve Bağla');
 
         popover.innerHTML = `
             <div class="popover-header">
@@ -237,7 +243,7 @@ export class AppController {
             e.preventDefault();
             e.stopPropagation();
             const formData = {
-                ad: '', soyad: '', cinsiyet: 'Belirtilmemiş', dogumTarihi: '',
+                ad: '', soyad: '', cinsiyet: 'Belirtilmemiş', dogumTarihi: '', yakinlikDerecesi: '',
                 selectedUnionId: null
             };
             const adEl = popover.querySelector('#pop-ad');
@@ -248,6 +254,8 @@ export class AppController {
             if (cinsiyetEl) formData.cinsiyet = cinsiyetEl.value;
             const tarihEl = popover.querySelector('#pop-tarih');
             if (tarihEl) formData.dogumTarihi = tarihEl.value;
+            const yakinlikEl = popover.querySelector('#pop-yakinlik');
+            if (yakinlikEl) formData.yakinlikDerecesi = yakinlikEl.value;
             const unionEl = popover.querySelector('#pop-union-select');
             if (unionEl) formData.selectedUnionId = unionEl.value;
             closePopover();
@@ -261,45 +269,26 @@ export class AppController {
     // ============================================================
     // DÜZENLEME MODU
     // ============================================================
-    enterEditMode(person) {
-        this.editingPersonId = person.id;
-        document.getElementById('p-ad').value = person.ad || '';
-        document.getElementById('p-soyad').value = person.soyad || '';
-        document.getElementById('p-cinsiyet').value = person.cinsiyet || 'Belirtilmemiş';
-        document.getElementById('p-tarih').value = person.dogumTarihi || '';
-        document.getElementById('p-yakinlik').value = person.yakinlikDerecesi || '';
-        if (person.fotograf) {
-            this.currentBase64Image = person.fotograf;
-            const imgPreview = document.getElementById('img-preview');
-            const previewContainer = document.getElementById('preview-container');
-            imgPreview.src = person.fotograf;
-            previewContainer.classList.remove('hidden');
-            previewContainer.classList.add('flex');
-        }
-        const submitBtn = document.getElementById('btn-submit-person');
-        const formTitle = document.getElementById('form-person-title');
-        submitBtn.textContent = 'Kişiyi Güncelle';
-        submitBtn.classList.remove('btn-primary');
-        submitBtn.classList.add('btn-edit-mode');
-        formTitle.textContent = '✏️ Kişiyi Düzenle';
-        document.getElementById('btn-cancel-edit').classList.remove('hidden');
-        document.getElementById('p-ad').focus();
-    }
-
-    exitEditMode() {
-        this.editingPersonId = null;
-        document.getElementById('form-person').reset();
-        this.currentBase64Image = null;
-        const previewContainer = document.getElementById('preview-container');
-        previewContainer.classList.add('hidden');
-        previewContainer.classList.remove('flex');
-        const submitBtn = document.getElementById('btn-submit-person');
-        const formTitle = document.getElementById('form-person-title');
-        submitBtn.textContent = 'Kişiyi Oluştur';
-        submitBtn.classList.remove('btn-edit-mode');
-        submitBtn.classList.add('btn-primary');
-        formTitle.textContent = 'Yeni Kişi Ekle';
-        document.getElementById('btn-cancel-edit').classList.add('hidden');
+    enterEditMode(person, event) {
+        const ev = event || this._lastContextEvent || { clientX: 400, clientY: 300 };
+        this.showPopover(ev, `✏️ "${person.ad} ${person.soyad}" Düzenle`, (formData) => {
+            if (!formData.ad || formData.ad.trim() === '') return;
+            const updates = {
+                ad: this._toTitleCase(formData.ad),
+                soyad: this._toTitleCase(formData.soyad),
+                cinsiyet: formData.cinsiyet,
+                dogumTarihi: formData.dogumTarihi,
+                yakinlikDerecesi: formData.yakinlikDerecesi
+            };
+            this.dataManager.updatePerson(person.id, updates);
+            this.render();
+        }, {
+            ad: person.ad,
+            soyad: person.soyad,
+            cinsiyet: person.cinsiyet,
+            dogumTarihi: person.dogumTarihi,
+            yakinlikDerecesi: person.yakinlikDerecesi
+        }, { editMode: true });
     }
 
     deletePersonWithConfirm(person) {
@@ -549,21 +538,21 @@ export class AppController {
             e.preventDefault();
             if (this.editingPersonId) {
                 const updates = {
-                    ad: document.getElementById('p-ad').value,
-                    soyad: document.getElementById('p-soyad').value,
+                    ad: this._toTitleCase(document.getElementById('p-ad').value),
+                    soyad: this._toTitleCase(document.getElementById('p-soyad').value),
                     cinsiyet: document.getElementById('p-cinsiyet').value,
                     dogumTarihi: document.getElementById('p-tarih').value,
                     yakinlikDerecesi: document.getElementById('p-yakinlik').value,
                     fotograf: this.currentBase64Image
                 };
                 this.dataManager.updatePerson(this.editingPersonId, updates);
-                this.exitEditMode();
+                this.editingPersonId = null;
                 this.render();
             } else {
                 const newPerson = {
                     id: this._generateId(),
-                    ad: document.getElementById('p-ad').value,
-                    soyad: document.getElementById('p-soyad').value,
+                    ad: this._toTitleCase(document.getElementById('p-ad').value),
+                    soyad: this._toTitleCase(document.getElementById('p-soyad').value),
                     cinsiyet: document.getElementById('p-cinsiyet').value,
                     dogumTarihi: document.getElementById('p-tarih').value,
                     yakinlikDerecesi: document.getElementById('p-yakinlik').value,
@@ -596,6 +585,12 @@ export class AppController {
         document.getElementById('btn-auto-layout').addEventListener('click', () => {
             this.dataManager.resetAllOffsets();
             this.render();
+        });
+
+        document.getElementById('btn-clear-yakinlik').addEventListener('click', () => {
+            this.dataManager.clearAllYakinlik();
+            this.render();
+            this.renderer.showToast('🧹 Tüm yakınlık dereceleri temizlendi.', 'success');
         });
     }
 }
