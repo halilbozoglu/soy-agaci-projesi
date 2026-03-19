@@ -19,6 +19,8 @@ export class DataManager {
         }
         // Legacy Data Migration: Title Case düzeltme
         this._migrateTitleCase();
+        // Default alan migrasyonu (isDeceased, isDivorced)
+        this._migrateDefaults();
     }
 
     _toTitleCase(str) {
@@ -38,6 +40,52 @@ export class DataManager {
             }
         });
         if (changed) this.save();
+    }
+
+    _migrateDefaults() {
+        let changed = false;
+        this.data.persons.forEach(p => {
+            if (p.isDeceased === undefined) { p.isDeceased = false; changed = true; }
+        });
+        this.data.unions.forEach(u => {
+            if (u.isDivorced === undefined) { u.isDivorced = false; changed = true; }
+        });
+        if (changed) this.save();
+    }
+
+    // Kişi Birleştirme: sourceId'nin tüm referanslarını targetId ile değiştir, sonra source'u sil
+    mergePersons(sourceId, targetId) {
+        this.executeTransaction(() => {
+            this.data.unions.forEach(u => {
+                // partnerIds'te source → target
+                if (u.partnerIds.includes(sourceId)) {
+                    u.partnerIds = u.partnerIds.map(pid => pid === sourceId ? targetId : pid);
+                    u.partnerIds = [...new Set(u.partnerIds)]; // deduplicate
+                }
+                // childrenIds'te source → target
+                if (u.childrenIds.includes(sourceId)) {
+                    u.childrenIds = u.childrenIds.map(cid => cid === sourceId ? targetId : cid);
+                    u.childrenIds = [...new Set(u.childrenIds)]; // deduplicate
+                }
+            });
+            // Source kişiyi sil
+            this.data.persons = this.data.persons.filter(p => p.id !== sourceId);
+            // Union GC
+            this.data.unions = this.data.unions.filter(u => {
+                const totalMembers = u.partnerIds.length + u.childrenIds.length;
+                if (totalMembers === 0) return false;
+                if (u.partnerIds.length <= 1 && u.childrenIds.length === 0) return false;
+                return true;
+            });
+        });
+    }
+
+    // Boşanma durumunu toggle et
+    toggleDivorced(unionId) {
+        this.executeTransaction(() => {
+            const u = this.data.unions.find(u => u.id === unionId);
+            if (u) u.isDivorced = !u.isDivorced;
+        });
     }
 
     save() {

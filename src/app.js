@@ -20,7 +20,9 @@ export class AppController {
             // FSM Linking
             startLinkingFSM: (person, action, ev) => this.startLinkingFSM(person, action, ev),
             onLinkingComplete: (p1, p2, state, unionId) => this.onLinkingComplete(p1, p2, state, unionId),
-            onEditParentsComplete: (child, parents) => this.onEditParentsComplete(child, parents)
+            onEditParentsComplete: (child, parents) => this.onEditParentsComplete(child, parents),
+            onMergeComplete: (source, target) => this.onMergeComplete(source, target),
+            toggleDivorced: (unionId) => { this.dataManager.toggleDivorced(unionId); this.render(); }
         });
     }
 
@@ -205,6 +207,7 @@ export class AppController {
                 </select>
                 <input type="text" id="pop-tarih" placeholder="Doğum Tarihi" class="form-input" value="${defaults.dogumTarihi || ''}" />
                 <input type="text" id="pop-yakinlik" placeholder="Yakınlık Derecesi" class="form-input" value="${defaults.yakinlikDerecesi || ''}" />
+                ${options.editMode ? `<label class="flex items-center gap-2 text-xs text-slate-300 mt-1 cursor-pointer"><input type="checkbox" id="pop-deceased" ${defaults.isDeceased ? 'checked' : ''} class="rounded"/> ✝ Vefat Etti</label>` : ''}
             `;
         }
 
@@ -256,6 +259,8 @@ export class AppController {
             if (tarihEl) formData.dogumTarihi = tarihEl.value;
             const yakinlikEl = popover.querySelector('#pop-yakinlik');
             if (yakinlikEl) formData.yakinlikDerecesi = yakinlikEl.value;
+            const deceasedEl = popover.querySelector('#pop-deceased');
+            if (deceasedEl) formData.isDeceased = deceasedEl.checked;
             const unionEl = popover.querySelector('#pop-union-select');
             if (unionEl) formData.selectedUnionId = unionEl.value;
             closePopover();
@@ -278,7 +283,8 @@ export class AppController {
                 soyad: this._toTitleCase(formData.soyad),
                 cinsiyet: formData.cinsiyet,
                 dogumTarihi: formData.dogumTarihi,
-                yakinlikDerecesi: formData.yakinlikDerecesi
+                yakinlikDerecesi: formData.yakinlikDerecesi,
+                isDeceased: formData.isDeceased || false
             };
             this.dataManager.updatePerson(person.id, updates);
             this.render();
@@ -287,8 +293,20 @@ export class AppController {
             soyad: person.soyad,
             cinsiyet: person.cinsiyet,
             dogumTarihi: person.dogumTarihi,
-            yakinlikDerecesi: person.yakinlikDerecesi
+            yakinlikDerecesi: person.yakinlikDerecesi,
+            isDeceased: person.isDeceased
         }, { editMode: true });
+    }
+
+    // ============================================================
+    // KİŞİ BİRLEŞTİRME (VERTEX MERGING)
+    // ============================================================
+    onMergeComplete(source, target) {
+        if (confirm(`"${source.ad} ${source.soyad}" kişisini "${target.ad} ${target.soyad}" ile birleştirmek istediğinize emin misiniz?\n\nKaynak kişi silinecek, tüm bağlantıları hedefe aktarılacaktır.`)) {
+            this.dataManager.mergePersons(source.id, target.id);
+            this.render();
+            this.renderer.showToast(`✅ "${source.ad}" → "${target.ad}" başarıyla birleştirildi.`, 'success');
+        }
     }
 
     deletePersonWithConfirm(person) {

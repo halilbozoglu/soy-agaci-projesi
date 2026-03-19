@@ -7,11 +7,16 @@ export class GraphRenderer {
         this.callbacks = callbacks || {};
 
         // --- FSM Linking State ---
-        this.linkingState = null; // null | 'SPOUSE' | 'CHILD' | 'SIBLING' | 'EDIT_PARENTS'
+        this.linkingState = null; // null | 'SPOUSE' | 'CHILD' | 'SIBLING' | 'EDIT_PARENTS' | 'MERGE_MODE'
         this._linkingSourcePerson = null;
         this._linkingTargetUnionId = null;
         this._editParentsChild = null;   // EDIT_PARENTS: çocuk kişi
         this._editParentsSelected = [];  // EDIT_PARENTS: seçilen ebeveynler
+        this._mergeSourcePerson = null;  // MERGE_MODE: kaynak kişi
+
+        // --- Çoklu Seçim ---
+        this.selectedNodeIds = new Set();
+        this._ctrlPressed = false;
 
         const container = document.getElementById(containerId);
         container.innerHTML = "";
@@ -89,17 +94,48 @@ export class GraphRenderer {
         // --- SMOOTH PAN & ZOOM ---
         this.zoom = d3.zoom()
             .scaleExtent([0.1, 4])
+            .filter((event) => !event.ctrlKey) // CTRL basılıyken zoom/pan devre dışı
             .on("zoom", (e) => this.g.attr("transform", e.transform));
         
         this.svg.call(this.zoom);
         this.svg.on("dblclick.zoom", null);
         this.svg.on("click", () => {
             this.hideContextMenu();
-            if (this.linkingState) this.cancelLinkingMode();
+            if (this.linkingState && this.linkingState !== 'MERGE_MODE') this.cancelLinkingMode();
+            if (this.linkingState === 'MERGE_MODE') { this.cancelLinkingMode(); return; }
+            // Normal tıklama: çoklu seçimi temizle
+            if (this.selectedNodeIds.size > 0) {
+                this.selectedNodeIds.clear();
+                this.g.selectAll(".node-type-person .card-bg").each(function(d) {
+                    d3.select(this).attr("stroke-width", 2);
+                });
+            }
         });
 
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape' && this.linkingState) this.cancelLinkingMode();
+            if (e.key === 'Control') this._ctrlPressed = true;
+        });
+        document.addEventListener('keyup', (e) => {
+            if (e.key === 'Control') this._ctrlPressed = false;
+        });
+
+        // --- CTRL + DRAG: Kutulu Çoklu Seçim (Brush) ---
+        this._brushGroup = this.svg.append("g").attr("class", "brush-layer").style("pointer-events", "none");
+        this._brush = d3.brush()
+            .extent([[0, 0], [4000, 4000]])
+            .on("end", (event) => this._onBrushEnd(event));
+        this._brushGroup.call(this._brush);
+        this._brushGroup.select(".overlay").style("pointer-events", "none");
+        this._brushGroup.select(".selection").style("fill", "rgba(99,102,241,0.15)").style("stroke", "#6366f1").style("stroke-dasharray", "4 2");
+
+        // CTRL tuşu ile brush'u aktifleştir
+        const self_init = this;
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Control') self_init._brushGroup.select(".overlay").style("pointer-events", "all");
+        });
+        document.addEventListener('keyup', (e) => {
+            if (e.key === 'Control') self_init._brushGroup.select(".overlay").style("pointer-events", "none");
         });
 
         this._nodePositions = new Map();
@@ -140,9 +176,46 @@ export class GraphRenderer {
         this._linkingTargetUnionId = null;
         this._editParentsChild = null;
         this._editParentsSelected = [];
+        this._mergeSourcePerson = null;
         this.hideToast();
         this.svg.style("cursor", null);
         this.g.selectAll(".node-type-person").classed("linking-candidate", false);
+    }
+
+    enterMergeMode(sourcePerson) {
+        this.linkingState = 'MERGE_MODE';
+        this._mergeSourcePerson = sourcePerson;
+        this.showToast(`🔗 "${sourcePerson.ad} ${sourcePerson.soyad}" → Birleştirilecek 2. kişiyi seçin... (ESC ile iptal)`, 'linking');
+        this.svg.style("cursor", "crosshair");
+        this.g.selectAll(".node-type-person").classed("linking-candidate", true);
+    }
+
+    // Brush bittiğinde seçim yap
+    _onBrushEnd(event) {
+        if (!event.selection) return;
+        const [[x0, y0], [x1, y1]] = event.selection;
+        this.selectedNodeIds.clear();
+
+        // SVG transform'u (zoom) hesaba kat
+        const transform = d3.zoomTransform(this.svg.node());
+        const self = this;
+
+        this.g.selectAll(".node-type-person").each(function(d) {
+            const pos = self._nodePositions.get(d.data.id);
+            if (!pos) return;
+            // Ekran koordinatına çevir
+            const sx = transform.applyX(pos.x);
+            const sy = transform.applyY(pos.y);
+            if (sx >= x0 && sx <= x1 && sy >= y0 && sy <= y1) {
+                self.selectedNodeIds.add(d.data.id);
+                d3.select(this).select(".card-bg").attr("stroke", "#eab308").attr("stroke-width", 3.5);
+            } else {
+                d3.select(this).select(".card-bg").attr("stroke-width", 2);
+            }
+        });
+
+        // Brush'u sıfırla (dikdörtgeni kaldır)
+        this._brushGroup.call(this._brush.move, null);
     }
 
     hideContextMenu() {
@@ -168,6 +241,7 @@ export class GraphRenderer {
             { icon: '🔗', label: 'Mevcut Kişiyi Çocuk Yap', action: 'startLinkChild' },
             { icon: '🔗', label: 'Mevcut Kişiyi Kardeş Yap', action: 'startLinkSibling' },
             { icon: '👨‍👩‍👦', label: 'Ebeveynleri Değiştir', action: 'startEditParents' },
+            { icon: '🔗', label: 'Başkasıyla Birleştir', action: 'startMerge' },
             { sep: true },
             { icon: '🗑️', label: 'Sil', action: 'delete', danger: true }
         ];
@@ -192,6 +266,8 @@ export class GraphRenderer {
                     }
                 } else if (item.action === 'startEditParents') {
                     this.enterEditParentsMode(personData);
+                } else if (item.action === 'startMerge') {
+                    this.enterMergeMode(personData);
                 } else if (this.callbacks[item.action]) {
                     if (this.callbacks._setLastEvent) this.callbacks._setLastEvent(event);
                     this.callbacks[item.action](personData, event);
@@ -397,6 +473,12 @@ export class GraphRenderer {
             .attr("stroke", "#94a3b8")
             .attr("stroke-width", 2)
             .attr("stroke-opacity", 0.35)
+            // Boşanmış union → partner çizgileri kesik çizgili
+            .attr("stroke-dasharray", d => {
+                if (d.target.data.type === 'union' && d.target.data.data && d.target.data.data.isDivorced) return '6 3';
+                if (d.source.data.type === 'union' && d.source.data.data && d.source.data.data.isDivorced) return '6 3';
+                return null;
+            })
             // Ok sadece Union → Child yönünde (source union, target person)
             .attr("marker-end", d => {
                 if (d.source.data.type === 'union') return 'url(#arrow)';
@@ -421,11 +503,29 @@ export class GraphRenderer {
         const unionGroups = nodeGroup.filter(d => d.data.type === 'union');
         unionGroups.append("circle")
             .attr("r", 6)
-            .attr("fill", "white")
-            .attr("stroke", "#e2e8f0")
+            .attr("fill", d => (d.data.data && d.data.data.isDivorced) ? '#64748b' : 'white')
+            .attr("stroke", d => (d.data.data && d.data.data.isDivorced) ? '#475569' : '#e2e8f0')
             .attr("stroke-width", 1.5)
             .attr("opacity", 0.8)
             .style("cursor", "grab");
+
+        // Boşanmış union: çapraz eğik çizgiler (//)
+        unionGroups.filter(d => d.data.data && d.data.data.isDivorced)
+            .each(function() {
+                const g = d3.select(this);
+                g.append("line").attr("x1", -4).attr("y1", -8).attr("x2", -4).attr("y2", 8)
+                    .attr("stroke", "#ef4444").attr("stroke-width", 1.5);
+                g.append("line").attr("x1", 4).attr("y1", -8).attr("x2", 4).attr("y2", 8)
+                    .attr("stroke", "#ef4444").attr("stroke-width", 1.5);
+            });
+
+        // Union çift tık: boşanma toggle
+        unionGroups.on("dblclick", (event, d) => {
+            event.stopPropagation();
+            if (d.data.data && this.callbacks.toggleDivorced) {
+                this.callbacks.toggleDivorced(d.data.data.id);
+            }
+        });
 
         // Person düğümleri
         const personGroups = nodeGroup.filter(d => d.data.type === 'person');
@@ -441,10 +541,25 @@ export class GraphRenderer {
             .attr("height", cardHeight)
             .attr("rx", 14)
             .attr("fill", d => self._getCardFill(d.data.data))
-            .attr("stroke", d => self._getCardStroke(d.data.data))
-            .attr("stroke-width", 2)
+            .attr("stroke", d => {
+                if (self.selectedNodeIds.has(d.data.id)) return '#eab308';
+                return self._getCardStroke(d.data.data);
+            })
+            .attr("stroke-width", d => self.selectedNodeIds.has(d.data.id) ? 3.5 : 2)
             .style("cursor", "pointer")
             .style("filter", "url(#card-shadow)");
+
+        // Vefat: siyah kurdele (sağ üst köşe)
+        personGroups.filter(d => d.data.data.isDeceased)
+            .append("polygon")
+            .attr("points", `${cardWidth/2 - 22},${-cardHeight/2} ${cardWidth/2},${-cardHeight/2} ${cardWidth/2},${-cardHeight/2 + 22}`)
+            .attr("fill", "#1e293b")
+            .attr("opacity", 0.85);
+        personGroups.filter(d => d.data.data.isDeceased)
+            .append("text")
+            .attr("x", cardWidth/2 - 6).attr("y", -cardHeight/2 + 11)
+            .attr("text-anchor", "middle").attr("fill", "white").attr("font-size", "8px")
+            .text("✝");
 
         personGroups.append("circle")
             .attr("cx", -cardWidth/2 + 14).attr("cy", -cardHeight/2 + 14).attr("r", 8)
@@ -460,7 +575,8 @@ export class GraphRenderer {
             .attr("width", 38).attr("height", 38)
             .attr("href", d => d.data.data.fotograf || "")
             .attr("clip-path", d => `circle(19px at ${-cardWidth/2 + 29}px ${-cardHeight/2 + 45}px)`)
-            .style("display", d => d.data.data.fotograf ? "block" : "none");
+            .style("display", d => d.data.data.fotograf ? "block" : "none")
+            .style("filter", d => d.data.data.isDeceased ? "grayscale(100%)" : null);
 
         const nameXOffset = d => d.data.data.fotograf ? -cardWidth/2 + 56 : 0;
         const alignOpts = d => d.data.data.fotograf ? "start" : "middle";
@@ -522,6 +638,21 @@ export class GraphRenderer {
         personGroups.on("click", function(event, d) {
             event.stopPropagation();
 
+            // MERGE_MODE: 2. kişi seçimi
+            if (self.linkingState === 'MERGE_MODE' && self._mergeSourcePerson) {
+                const targetPerson = d.data.data;
+                if (targetPerson.id === self._mergeSourcePerson.id) {
+                    self.showToast('⚠️ Aynı kişiyi seçemezsiniz.', 'error');
+                    return;
+                }
+                const source = self._mergeSourcePerson;
+                self.cancelLinkingMode();
+                if (self.callbacks.onMergeComplete) {
+                    self.callbacks.onMergeComplete(source, targetPerson);
+                }
+                return;
+            }
+
             // EDIT_PARENTS modu
             if (self.linkingState === 'EDIT_PARENTS' && self._editParentsChild) {
                 const clickedPerson = d.data.data;
@@ -534,7 +665,6 @@ export class GraphRenderer {
                     self.showToast(`👨‍👩‍👦 1. ebeveyn: "${clickedPerson.ad}". 2. Ebeveyni seçin veya boşluğa tıklayın...`, 'linking');
                     return;
                 }
-                // 2 ebeveyn seçildi → callback
                 const child = self._editParentsChild;
                 const parents = [...self._editParentsSelected];
                 self.cancelLinkingMode();
@@ -577,7 +707,7 @@ export class GraphRenderer {
             }
         });
 
-        // --- DRAG & DROP: Hem Person hem Union sürüklenebilir ---
+        // --- DRAG & DROP: Hem Person hem Union sürüklenebilir (Multi-Drag destekli) ---
         const draggableGroups = nodeGroup.filter(d => d.data.type === 'person' || d.data.type === 'union');
 
         const dragBehavior = d3.drag()
@@ -593,10 +723,22 @@ export class GraphRenderer {
                 d3.select(this).raise().classed("dragging", true);
             })
             .on("drag", function(event, d) {
-                const newX = event.x;
-                const newY = event.y;
-                d3.select(this).attr("transform", `translate(${newX},${newY})`);
-                self._nodePositions.set(d.data.id, { x: newX, y: newY, baseX: d.x, baseY: d.y });
+                const dx = event.dx;
+                const dy = event.dy;
+                const draggedId = d.data.id;
+                const isMulti = self.selectedNodeIds.has(draggedId) && self.selectedNodeIds.size > 1;
+
+                const idsToMove = isMulti ? [...self.selectedNodeIds] : [draggedId];
+
+                idsToMove.forEach(nodeId => {
+                    const pos = self._nodePositions.get(nodeId);
+                    if (!pos) return;
+                    pos.x += dx;
+                    pos.y += dy;
+                    self.g.select(`[data-node-id="${nodeId}"]`).attr("transform", `translate(${pos.x},${pos.y})`);
+                });
+
+                // Tüm çizgileri güncelle
                 self.g.select(".links-layer").selectAll("path.dag-link")
                     .attr("d", linkD => {
                         const srcPos = self._nodePositions.get(linkD.source.data.id);
@@ -608,16 +750,22 @@ export class GraphRenderer {
             })
             .on("end", function(event, d) {
                 d3.select(this).classed("dragging", false);
-                const pos = self._nodePositions.get(d.data.id);
-                const ox = pos ? pos.x - pos.baseX : 0;
-                const oy = pos ? pos.y - pos.baseY : 0;
-                if (self.callbacks.onDragEnd) {
-                    self.callbacks.onDragEnd(
-                        d.data.type === 'person' ? d.data.data.id : d.data.data.id,
-                        ox, oy,
-                        d.data.type  // 'person' veya 'union'
-                    );
-                }
+                const draggedId = d.data.id;
+                const isMulti = self.selectedNodeIds.has(draggedId) && self.selectedNodeIds.size > 1;
+                const idsToSave = isMulti ? [...self.selectedNodeIds] : [draggedId];
+
+                idsToSave.forEach(nodeId => {
+                    const pos = self._nodePositions.get(nodeId);
+                    if (!pos) return;
+                    const ox = pos.x - pos.baseX;
+                    const oy = pos.y - pos.baseY;
+                    // nodeType belirleme: person veya union
+                    const nodeType = nodeId.startsWith('u_') ? 'union' : 'person';
+                    const dataId = nodeId.startsWith('p_') ? nodeId.slice(2) : (nodeId.startsWith('u_') ? nodeId.slice(2) : nodeId);
+                    if (self.callbacks.onDragEnd) {
+                        self.callbacks.onDragEnd(dataId, ox, oy, nodeType);
+                    }
+                });
             });
         
         draggableGroups.call(dragBehavior);
