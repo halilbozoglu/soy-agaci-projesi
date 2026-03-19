@@ -592,5 +592,52 @@ export class AppController {
             this.render();
             this.renderer.showToast('🧹 Tüm yakınlık dereceleri temizlendi.', 'success');
         });
+
+        // ============================================================
+        // DIŞA AKTARIM (EXPORT) VE İÇE AKTARIM (IMPORT)
+        // ============================================================
+        document.getElementById('btn-export').addEventListener('click', () => {
+            const dataStr = JSON.stringify(this.dataManager.data, null, 2);
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'soy-agaci-yedek.json';
+            a.click();
+            URL.revokeObjectURL(url);
+            this.renderer.showToast('💾 Yedek başarıyla indirildi.', 'success');
+        });
+
+        const importInput = document.getElementById('import-file');
+        document.getElementById('btn-import').addEventListener('click', () => {
+            importInput.click();
+        });
+
+        importInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                try {
+                    const parsedData = JSON.parse(event.target.result);
+                    if (!parsedData.persons || !parsedData.unions) {
+                        throw new Error('Geçersiz JSON formatı. "persons" ve "unions" dizileri gereklidir.');
+                    }
+                    // Validasyon başarılı
+                    this.dataManager.data = parsedData;
+                    this.dataManager.save();
+                    this.dataManager.historyStack = []; // Geçmişi temizle
+                    this.render();
+                    this.renderer.showToast('📂 Yedek başarıyla yüklendi.', 'success');
+                } catch (err) {
+                    console.error("Yedek Yükleme Hatası:", err);
+                    alert("Yedek yüklenirken hata oluştu: " + err.message);
+                } finally {
+                    e.target.value = ''; // Input sıfırlama (aynı dosyayı tekrar seçebilmek için)
+                }
+            };
+            reader.readAsText(file);
+        });
     }
 }
