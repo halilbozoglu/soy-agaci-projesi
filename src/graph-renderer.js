@@ -765,45 +765,60 @@ export class GraphRenderer {
                 d3.select(this).raise().classed("dragging", true);
             })
             .on("drag", function(event, d) {
-                const dx = event.dx;
-                const dy = event.dy;
                 const draggedId = d.data.id;
-                const isMulti = self.selectedNodeIds.has(draggedId) && self.selectedNodeIds.size > 1;
+                
+                // 1. Hareket Grubu Belirleme
+                const idsToMove = self.selectedNodeIds.has(draggedId) 
+                    ? Array.from(self.selectedNodeIds) 
+                    : [draggedId];
 
-                const idsToMove = isMulti ? [...self.selectedNodeIds] : [draggedId];
-
+                // 2. Veri ve 3. DOM Güncellemesi
                 idsToMove.forEach(nodeId => {
                     const pos = self._nodePositions.get(nodeId);
                     if (!pos) return;
-                    pos.x += dx;
-                    pos.y += dy;
-                    self.g.select(`[data-node-id="${nodeId}"]`).attr("transform", `translate(${pos.x},${pos.y})`);
+                    
+                    // .x ve .y değerlerine dx, dy DOĞRUDAN EKLENİR
+                    pos.x += event.dx;
+                    pos.y += event.dy;
+                    
+                    // SVG <g> elementini DOM'dan ID ile seç (data-node-id kullanarak) ve transform'u anında güncelle
+                    self.g.select(`[data-node-id="${nodeId}"]`)
+                        .attr("transform", `translate(${pos.x},${pos.y})`);
                 });
 
-                // Tüm çizgileri güncelle
-                self.g.select(".links-layer").selectAll("path.dag-link")
+                // 4. Eşzamanlı Çizgi (Links/Paths) Güncellemesi
+                self.g.selectAll("path.dag-link")
                     .attr("d", linkD => {
                         const srcPos = self._nodePositions.get(linkD.source.data.id);
                         const tgtPos = self._nodePositions.get(linkD.target.data.id);
                         if (srcPos && tgtPos) return self._bezierPath(srcPos, tgtPos);
-                        if (linkD.points && linkD.points.length >= 2) return self._bezierPath(linkD.points[0], linkD.points[linkD.points.length - 1]);
+                        
+                        // Fallback yörünge (grafiğin d3-dag points nesnesi varsa)
+                        if (linkD.points && linkD.points.length >= 2) {
+                            return self._bezierPath(linkD.points[0], linkD.points[linkD.points.length - 1]);
+                        }
                         return '';
                     });
             })
             .on("end", function(event, d) {
                 d3.select(this).classed("dragging", false);
                 const draggedId = d.data.id;
-                const isMulti = self.selectedNodeIds.has(draggedId) && self.selectedNodeIds.size > 1;
-                const idsToSave = isMulti ? [...self.selectedNodeIds] : [draggedId];
+                
+                // Kayıt Grubu
+                const idsToSave = self.selectedNodeIds.has(draggedId) 
+                    ? Array.from(self.selectedNodeIds) 
+                    : [draggedId];
 
                 idsToSave.forEach(nodeId => {
                     const pos = self._nodePositions.get(nodeId);
                     if (!pos) return;
                     const ox = pos.x - pos.baseX;
                     const oy = pos.y - pos.baseY;
+                    
                     // nodeType belirleme: person veya union
                     const nodeType = nodeId.startsWith('u_') ? 'union' : 'person';
                     const dataId = nodeId.startsWith('p_') ? nodeId.slice(2) : (nodeId.startsWith('u_') ? nodeId.slice(2) : nodeId);
+                    
                     if (self.callbacks.onDragEnd) {
                         self.callbacks.onDragEnd(dataId, ox, oy, nodeType);
                     }
