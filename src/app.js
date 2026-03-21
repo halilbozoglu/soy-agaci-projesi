@@ -206,8 +206,7 @@ export class AppController {
                     <option value="Belirtilmemiş" ${(!defaults.cinsiyet || defaults.cinsiyet === 'Belirtilmemiş') ? 'selected' : ''}>Belirtilmemiş</option>
                 </select>
                 <input type="text" id="pop-tarih" placeholder="Doğum Tarihi" class="form-input" value="${defaults.dogumTarihi || ''}" />
-                <input type="text" id="pop-yakinlik" placeholder="Yakınlık Derecesi" class="form-input" value="${defaults.yakinlikDerecesi || ''}" />
-                ${options.editMode ? `<label class="flex items-center gap-2 text-xs text-slate-300 mt-1 cursor-pointer"><input type="checkbox" id="pop-deceased" ${defaults.isDeceased ? 'checked' : ''} class="rounded"/> ✝ Vefat Etti</label>` : ''}
+                ${options.editMode ? `<label class="flex items-center gap-2 text-xs text-slate-300 mt-1 cursor-pointer"><input type="checkbox" id="pop-deceased" ${defaults.isDeceased ? 'checked' : ''} class="rounded"/> 🖤 Vefat Etti</label>` : ''}
             `;
         }
 

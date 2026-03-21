@@ -57,24 +57,24 @@ export class GraphRenderer {
             .attr("id", "male-card-bg")
             .attr("x1", "0%").attr("y1", "0%")
             .attr("x2", "100%").attr("y2", "100%");
-        maleGrad.append("stop").attr("offset", "0%").attr("stop-color", "#eff6ff");
-        maleGrad.append("stop").attr("offset", "100%").attr("stop-color", "#dbeafe");
+        maleGrad.append("stop").attr("offset", "0%").attr("stop-color", "#1e3a8a"); // Koyu mavi
+        maleGrad.append("stop").attr("offset", "100%").attr("stop-color", "#172554");
 
         // Kadın kart gradient
         const femaleGrad = defs.append("linearGradient")
             .attr("id", "female-card-bg")
             .attr("x1", "0%").attr("y1", "0%")
             .attr("x2", "100%").attr("y2", "100%");
-        femaleGrad.append("stop").attr("offset", "0%").attr("stop-color", "#fdf2f8");
-        femaleGrad.append("stop").attr("offset", "100%").attr("stop-color", "#fce7f3");
+        femaleGrad.append("stop").attr("offset", "0%").attr("stop-color", "#831843"); // Koyu bordo/pembe
+        femaleGrad.append("stop").attr("offset", "100%").attr("stop-color", "#4c0519");
 
         // Default kart gradient
         const defaultGrad = defs.append("linearGradient")
             .attr("id", "default-card-bg")
             .attr("x1", "0%").attr("y1", "0%")
             .attr("x2", "100%").attr("y2", "100%");
-        defaultGrad.append("stop").attr("offset", "0%").attr("stop-color", "#f8fafc");
-        defaultGrad.append("stop").attr("offset", "100%").attr("stop-color", "#f1f5f9");
+        defaultGrad.append("stop").attr("offset", "0%").attr("stop-color", "#334155"); // Koyu gri/slate
+        defaultGrad.append("stop").attr("offset", "100%").attr("stop-color", "#1e293b");
 
         // Ok işareti (Union → Child yönü)
         defs.append("marker")
@@ -318,11 +318,13 @@ export class GraphRenderer {
     }
 
     _getCardFill(person) {
+        if (person.isDeceased) return 'url(#default-card-bg)';
         if (person.cinsiyet === 'Erkek') return 'url(#male-card-bg)';
         if (person.cinsiyet === 'Kadın') return 'url(#female-card-bg)';
         return 'url(#default-card-bg)';
     }
     _getCardStroke(person) {
+        if (person.isDeceased) return '#1e293b';
         if (person.cinsiyet === 'Erkek') return '#60a5fa';
         if (person.cinsiyet === 'Kadın') return '#f472b6';
         return '#94a3b8';
@@ -334,9 +336,9 @@ export class GraphRenderer {
     }
 
     _getNameColor(person) {
-        if (person.cinsiyet === 'Erkek') return '#2563eb';
-        if (person.cinsiyet === 'Kadın') return '#db2777';
-        return '#475569';
+        if (person.cinsiyet === 'Erkek') return '#93c5fd'; // Acik mavi
+        if (person.cinsiyet === 'Kadın') return '#f9a8d4'; // Acik pembe
+        return '#cbd5e1'; // Acik slate
     }
 
     render(dataManager) {
@@ -400,16 +402,16 @@ export class GraphRenderer {
             const layout = d3dag.sugiyama()
                 .nodeSize(n => {
                     if (!n || !n.data) return [0, 0];
-                    // Union: Katı sınır kutusu (2 eş + marjin = 350px)
-                    if (n.data.type === 'union') return [350, 300];
+                    // Union: Devasa blok olarak (Kapsayıcı) = 650px (dikey 300px yayılım)
+                    if (n.data.type === 'union') return [650, 300];
                     if (n.data.type === 'dummy') return [50, 300];
                     // Person: Dar yatay, geniş dikey
-                    return [220, 300];
+                    return [250, 300];
                 })
                 .layering(d3dag.layeringLongestPath())
                 .decross(d3dag.decrossTwoLayer())
-                // coordCenter: Ağacı merkeze toplar, kuzenler savrulmaz
-                .coord(d3dag.coordCenter());
+                // coordGreedy: Kuzenlerin savrulmasını engeller ve alt ağaçları izole eder
+                .coord(d3dag.coordGreedy());
             layout(dagInfo);
         } catch(error) {
             console.error("DAG Layout Hatası:", error);
@@ -437,9 +439,9 @@ export class GraphRenderer {
             uNode.y = maxY;
         });
 
-        // 2b. X Kümeleme: Eşleri Union merkezinin ±100px'ine sabitle
-        // Union 350px katı sınır → eşler (200px toplam) sınır içinde kalır
-        const SPOUSE_HALF_GAP = 100;
+        // 2b. X Kümeleme: Eşleri Union merkezinin ±140px'ine sabitle
+        // Union 650px tahsis edildi -> eşler (280px toplam) kesinlikle sınır içinde kalır.
+        const SPOUSE_HALF_GAP = 140;
         data.unions.forEach(u => {
             const uNode = nodeById.get(`u_${u.id}`);
             if (!uNode) return;
@@ -540,8 +542,8 @@ export class GraphRenderer {
         const unionGroups = nodeGroup.filter(d => d.data.type === 'union');
         unionGroups.append("circle")
             .attr("r", 6)
-            .attr("fill", d => (d.data.data && d.data.data.isDivorced) ? '#64748b' : 'white')
-            .attr("stroke", d => (d.data.data && d.data.data.isDivorced) ? '#475569' : '#e2e8f0')
+            .attr("fill", d => (d.data.data && d.data.data.isDivorced) ? '#334155' : '#0f172a')
+            .attr("stroke", d => (d.data.data && d.data.data.isDivorced) ? '#94a3b8' : '#334155')
             .attr("stroke-width", 1.5)
             .attr("opacity", 0.8)
             .style("cursor", "grab");
@@ -586,15 +588,13 @@ export class GraphRenderer {
             .style("cursor", "pointer")
             .style("filter", "url(#card-shadow)");
 
-        // Vefat: İslami Hilal ve Yıldız Sembolü (☪)
+        // Vefat: Sağ üst köşeye siyah üçgen (mourning ribbon/poligon)
         personGroups.filter(d => d.data.data.isDeceased)
-            .append("text")
-            .attr("x", cardWidth/2 - 16)
-            .attr("y", -cardHeight/2 + 24)
-            .attr("text-anchor", "middle")
-            .attr("fill", "#1e293b")
-            .attr("font-size", "22px")
-            .text("☪");
+            .append("polygon")
+            // Koordinatlar: kartın sağ üst köşesine oturacak şekilde (width=170, height=90)
+            .attr("points", `${cardWidth/2 - 25}, ${-cardHeight/2} ${cardWidth/2}, ${-cardHeight/2} ${cardWidth/2}, ${-cardHeight/2 + 25}`)
+            .attr("fill", "black")
+            .attr("opacity", 0.85);
 
         personGroups.append("circle")
             .attr("cx", -cardWidth/2 + 14).attr("cy", -cardHeight/2 + 14).attr("r", 8)

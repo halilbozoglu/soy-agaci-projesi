@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="tr">
+<html lang="tr" class="dark">
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -8,29 +8,29 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 </head>
-<body class="bg-slate-900 text-slate-100 font-sans h-screen flex overflow-hidden" style="font-family: 'Inter', sans-serif;">
+<body class="bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-slate-100 font-sans h-screen flex overflow-hidden" style="font-family: 'Inter', sans-serif;">
     <!-- Sol Menü: Glassmorphism Panel -->
-    <aside class="w-80 flex flex-col h-full overflow-y-auto z-10 p-5 sidebar-glass">
-        <h1 class="text-xl font-extrabold mb-5 text-white border-b border-white/10 pb-3 flex items-center gap-2">
+    <aside class="w-80 flex flex-col h-full overflow-y-auto z-10 p-5 sidebar-glass dark:bg-slate-900/80 bg-white/80 border-r dark:border-white/10 border-slate-200">
+        <h1 class="text-xl font-extrabold mb-5 dark:text-white text-slate-800 border-b dark:border-white/10 border-slate-200 pb-3 flex items-center gap-2">
             <span class="text-2xl">🌳</span> Aile Ağacı
         </h1>
         
         <div class="space-y-5">
             <!-- Global action butonları -->
             <div class="flex space-x-2">
-                <button id="btn-undo" class="flex-1 bg-white/10 hover:bg-white/20 text-white py-2.5 rounded-lg text-sm font-semibold transition-all backdrop-blur-sm border border-white/10">↩ Geri Al</button>
-                <button id="btn-clear" class="flex-1 bg-red-500/20 hover:bg-red-500/30 text-red-300 py-2.5 rounded-lg text-sm font-semibold transition-all backdrop-blur-sm border border-red-500/20">🗑 Sıfırla</button>
+                <button id="btn-undo" class="flex-1 dark:bg-white/10 dark:hover:bg-white/20 bg-slate-200 hover:bg-slate-300 dark:text-white text-slate-700 py-2.5 rounded-lg text-sm font-semibold transition-all backdrop-blur-sm border dark:border-white/10 border-slate-300">↩ Geri Al</button>
+                <button id="btn-clear" class="flex-1 dark:bg-red-500/20 dark:hover:bg-red-500/30 bg-red-100 hover:bg-red-200 dark:text-red-300 text-red-700 py-2.5 rounded-lg text-sm font-semibold transition-all backdrop-blur-sm border dark:border-red-500/20 border-red-200">🗑 Sıfırla</button>
             </div>
-            <button id="btn-auto-layout" class="w-full bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 py-2.5 rounded-lg text-sm font-semibold transition-all backdrop-blur-sm border border-emerald-500/20">✨ Otomatik Yerleştir</button>
-            <button id="btn-clear-yakinlik" class="w-full bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 py-2.5 rounded-lg text-sm font-semibold transition-all backdrop-blur-sm border border-amber-500/20">🧹 Dereceleri Temizle</button>
+            <button id="btn-auto-layout" class="w-full dark:bg-emerald-500/20 dark:hover:bg-emerald-500/30 bg-emerald-100 hover:bg-emerald-200 dark:text-emerald-300 text-emerald-700 py-2.5 rounded-lg text-sm font-semibold transition-all backdrop-blur-sm border dark:border-emerald-500/20 border-emerald-200">✨ Otomatik Yerleştir</button>
+            <button id="btn-clear-yakinlik" class="w-full dark:bg-amber-500/20 dark:hover:bg-amber-500/30 bg-amber-100 hover:bg-amber-200 dark:text-amber-300 text-amber-700 py-2.5 rounded-lg text-sm font-semibold transition-all backdrop-blur-sm border dark:border-amber-500/20 border-amber-200">🧹 Dereceleri Temizle</button>
             <div class="flex space-x-2">
-                <button id="btn-export" class="flex-1 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 py-2.5 rounded-lg text-sm font-semibold transition-all backdrop-blur-sm border border-blue-500/20">💾 Yedeği İndir</button>
-                <button id="btn-import" class="flex-1 bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 py-2.5 rounded-lg text-sm font-semibold transition-all backdrop-blur-sm border border-purple-500/20">📂 Yedeği Yükle</button>
+                <button id="btn-export" class="flex-1 dark:bg-blue-500/20 dark:hover:bg-blue-500/30 bg-blue-100 hover:bg-blue-200 dark:text-blue-300 text-blue-700 py-2.5 rounded-lg text-sm font-semibold transition-all backdrop-blur-sm border dark:border-blue-500/20 border-blue-200">💾 Yedeği İndir</button>
+                <button id="btn-import" class="flex-1 dark:bg-purple-500/20 dark:hover:bg-purple-500/30 bg-purple-100 hover:bg-purple-200 dark:text-purple-300 text-purple-700 py-2.5 rounded-lg text-sm font-semibold transition-all backdrop-blur-sm border dark:border-purple-500/20 border-purple-200">📂 Yedeği Yükle</button>
             </div>
             <input type="file" id="import-file" accept=".json" class="hidden" />
 
             <div class="form-card" id="person-form-card">
-                <h2 id="form-person-title" class="text-md font-bold text-white mb-3">Yeni Kişi Ekle</h2>
+                <h2 id="form-person-title" class="text-md font-bold dark:text-white text-slate-800 mb-3">Yeni Kişi Ekle</h2>
                 <form id="form-person" class="space-y-3">
                     <input type="text" id="p-ad" placeholder="Ad" required class="form-input" />
                     <input type="text" id="p-soyad" placeholder="Soyad" required class="form-input" />
@@ -43,7 +43,7 @@
                     <input type="text" id="p-yakinlik" placeholder="Yakınlık (Serbest Metin)" class="form-input" />
                     
                     <!-- Drag & Drop Fotoğraf -->
-                    <div id="drop-zone" class="border-2 border-dashed border-white/20 rounded-lg p-3 text-center text-xs text-slate-400 bg-white/5 hover:bg-white/10 transition-all cursor-pointer">
+                    <div id="drop-zone" class="border-2 border-dashed dark:border-white/20 border-slate-300 rounded-lg p-3 text-center text-xs dark:text-slate-400 text-slate-500 dark:bg-white/5 bg-slate-50 dark:hover:bg-white/10 hover:bg-slate-100 transition-all cursor-pointer">
                         📷 Fotoğraf Buraya Sürükle veya Seç
                         <input type="file" id="p-foto" class="hidden" accept="image/*" />
                     </div>
@@ -53,7 +53,7 @@
                     </div>
 
                     <button type="submit" id="btn-submit-person" class="w-full btn-primary">Kişiyi Oluştur</button>
-                    <button type="button" id="btn-cancel-edit" class="hidden w-full bg-white/10 hover:bg-white/20 text-white font-semibold py-2.5 rounded-lg text-sm transition-all mt-1 border border-white/10">İptal</button>
+                    <button type="button" id="btn-cancel-edit" class="hidden w-full dark:bg-white/10 dark:hover:bg-white/20 bg-slate-200 hover:bg-slate-300 dark:text-white text-slate-700 font-semibold py-2.5 rounded-lg text-sm transition-all mt-1 border dark:border-white/10 border-slate-300">İptal</button>
                 </form>
             </div>
 
@@ -62,7 +62,7 @@
     </aside>
 
     <!-- Grafik Render Alanı -->
-    <main class="flex-1 h-full relative bg-slate-50" id="graph-container">
+    <main class="flex-1 h-full relative bg-slate-50 dark:bg-[#0f172a]" id="graph-container">
         <!-- D3-DAG SVG burada render edilecek -->
     </main>
 

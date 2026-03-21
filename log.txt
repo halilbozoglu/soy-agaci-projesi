@@ -1,0 +1,20 @@
+53d27c5 feat: longestPath layering, nodeSize reduce, islami vefat ikonu ve cinsiyet senkronizasyonu
+ src/data-manager.js   | 21 ++++++++++++++++++++-
+ src/graph-renderer.js | 38 +++++++++++++++++---------------------
+ 2 files changed, 37 insertions(+), 22 deletions(-)
+41a115b feat: nodeSize 650x400, coordGreedy, SPOUSE 150, otomatik es cinsiyet tespiti lockGender
+ src/app.js            | 16 ++++++++++------
+ src/graph-renderer.js | 19 ++++++++++---------
+ 2 files changed, 20 insertions(+), 15 deletions(-)
+58fe2dd feat: brush/zoom fix, hilal ikonu, edge hiyerarsisi, staggered kardes + coordCenter
+ src/graph-renderer.js | 108 ++++++++++++++++++++++++++++++++++----------------
+ 1 file changed, 73 insertions(+), 35 deletions(-)
+f03fc2d feat: brush secim, multi-drag, merge, deceased, divorced - 5 gelismis etkilesim modulu
+ src/app.js            |  24 ++++++-
+ src/data-manager.js   |  48 +++++++++++++
+ src/graph-renderer.js | 194 ++++++++++++++++++++++++++++++++++++++++++++------
+ 3 files changed, 240 insertions(+), 26 deletions(-)
+6ccf016 feat: JSON yedekleme (export/import) eklendi
+ index.html |  5 +++++
+ src/app.js | 47 +++++++++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 52 insertions(+)

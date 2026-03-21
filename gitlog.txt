@@ -1,0 +1,235 @@
+commit 53d27c589f9999ff896da2d938ab03bdbe5b8770
+Author: halilbozoglu <bozogluhalil087@gmail.com>
+Date:   Thu Mar 19 18:34:23 2026 +0300
+
+    feat: longestPath layering, nodeSize reduce, islami vefat ikonu ve cinsiyet senkronizasyonu
+
+M	src/data-manager.js
+M	src/graph-renderer.js
+
+commit 41a115b6b34f3febb9d9df818ea9630d01d8c2ad
+Author: halilbozoglu <bozogluhalil087@gmail.com>
+Date:   Thu Mar 19 18:12:02 2026 +0300
+
+    feat: nodeSize 650x400, coordGreedy, SPOUSE 150, otomatik es cinsiyet tespiti lockGender
+
+M	src/app.js
+M	src/graph-renderer.js
+
+commit 58fe2dd96e4804f45bb7654ef64f5b67e320a718
+Author: halilbozoglu <bozogluhalil087@gmail.com>
+Date:   Thu Mar 19 17:59:18 2026 +0300
+
+    feat: brush/zoom fix, hilal ikonu, edge hiyerarsisi, staggered kardes + coordCenter
+
+M	src/graph-renderer.js
+
+commit f03fc2d433938c0ed0b32368c209f506d5896409
+Author: halilbozoglu <bozogluhalil087@gmail.com>
+Date:   Thu Mar 19 17:38:52 2026 +0300
+
+    feat: brush secim, multi-drag, merge, deceased, divorced - 5 gelismis etkilesim modulu
+
+M	src/app.js
+M	src/data-manager.js
+M	src/graph-renderer.js
+
+commit 6ccf01646e964fadddb7fd1d6a1c745d3a51dfc0
+Author: halilbozoglu <bozogluhalil087@gmail.com>
+Date:   Thu Mar 19 07:13:13 2026 +0300
+
+    feat: JSON yedekleme (export/import) eklendi
+
+M	index.html
+M	src/app.js
+
+commit 21c233376d6ea538b133ffde8f6fb0d833a170f4
+Author: halilbozoglu <bozogluhalil087@gmail.com>
+Date:   Thu Mar 19 06:39:05 2026 +0300
+
+    feat: Union 600px kati sinir kutusu, coordGreedy alt-agac izolasyonu, SPOUSE_GAP 140
+
+M	src/graph-renderer.js
+
+commit a9640722ed96eff1d0510db9d63705b1ccef8174
+Author: halilbozoglu <bozogluhalil087@gmail.com>
+Date:   Thu Mar 19 06:31:41 2026 +0300
+
+    feat: Union 450px guvenli bolge, Person 220x300, SPOUSE_GAP 120, topolojik izolasyon
+
+M	src/graph-renderer.js
+
+commit 89d89f2d9027733fb526b630875eaa64492d1e7e
+Author: halilbozoglu <bozogluhalil087@gmail.com>
+Date:   Thu Mar 19 06:22:24 2026 +0300
+
+    feat: legacy title case migrasyon, nodeSize 350x280, SPOUSE_GAP 80, dikey genisleme
+
+M	src/data-manager.js
+M	src/graph-renderer.js
+
+commit 3a0609083e744995c291ded4fb60e35acc0331c3
+Author: halilbozoglu <bozogluhalil087@gmail.com>
+Date:   Thu Mar 19 06:17:26 2026 +0300
+
+    feat: edit popover, toTitleCase, derece temizle butonu, nodeSize 240x140 SPOUSE_GAP 110
+
+M	index.html
+M	src/app.js
+M	src/data-manager.js
+M	src/graph-renderer.js
+
+commit bbf202377d157a754df9187c55a1fe9dc9b78180
+Author: halilbozoglu <bozogluhalil087@gmail.com>
+Date:   Thu Mar 19 06:00:20 2026 +0300
+
+    feat: UI sadeles birliktelik formu silindi, reaktif form, es Y hizalama + X kumeleme post-processing, nodeSize 400x150
+
+M	index.html
+M	src/app.js
+M	src/graph-renderer.js
+
+commit 87f6ab05cecd320e6136272776bce868c8217429
+Author: halilbozoglu <bozogluhalil087@gmail.com>
+Date:   Thu Mar 19 05:46:34 2026 +0300
+
+    feat: NodeSize 300x140, union drag+offset, yakinlik temizleme, EDIT_PARENTS FSM reparenting
+
+M	src/app.js
+M	src/data-manager.js
+M	src/graph-renderer.js
+
+commit 980ba6d977ed16c41c5d9490c817ddc0fed37709
+Author: halilbozoglu <bozogluhalil087@gmail.com>
+Date:   Thu Mar 19 05:35:50 2026 +0300
+
+    feat: Ok isaretleri (union>child), ebeveyn dedup (mevcut union kullan), coklu evlilik union secimi zorunlu
+
+M	src/app.js
+M	src/graph-renderer.js
+
+commit 47b4af38bc214fb34fef328cd6926b9c001f1cb1
+Author: halilbozoglu <bozogluhalil087@gmail.com>
+Date:   Thu Mar 19 05:28:57 2026 +0300
+
+    feat: Bezier curves, dinamik nodeSize (union 30x80 person 220x120), decrossTwoLayer
+
+M	src/graph-renderer.js
+
+commit 3750353edd07ccd9d13aca84a146dd988fe036bf
+Author: halilbozoglu <bozogluhalil087@gmail.com>
+Date:   Thu Mar 19 05:12:16 2026 +0300
+
+    fix: Drag DOM senkronizasyonu (subject bazli), oto-yerlestir butonu, nodeSize genisletme
+
+M	index.html
+M	src/app.js
+M	src/data-manager.js
+M	src/graph-renderer.js
+
+commit 9385bd0b187343d9cdefbd277a7414db9a6775bd
+Author: halilbozoglu <bozogluhalil087@gmail.com>
+Date:   Thu Mar 19 05:01:31 2026 +0300
+
+    feat: Deterministik layout siralama, FSM linking state (SPOUSE/CHILD/SIBLING), drag/click izolasyonu, hover glow, context menu ayirici
+
+M	src/app.js
+M	src/graph-renderer.js
+M	src/style.css
+
+commit b86b04e152fd767c6af1d8381f0f1bf9d3b3a3b9
+Author: halilbozoglu <bozogluhalil087@gmail.com>
+Date:   Thu Mar 19 04:36:38 2026 +0300
+
+    feat: Kardes ekleme, batch insert, cycle detection (DFS), union secici, hover cizgi parlama, renk kodlama
+
+M	src/app.js
+M	src/data-manager.js
+M	src/graph-renderer.js
+M	src/style.css
+
+commit b098bc0fe8dbd0cdf60b476ff9f50312dbcd605f
+Author: halilbozoglu <bozogluhalil087@gmail.com>
+Date:   Thu Mar 19 04:18:17 2026 +0300
+
+    feat: Atomik silme ile Union GC, native prompt yerine glassmorphism popover modal, popover CSS
+
+M	src/app.js
+M	src/data-manager.js
+M	src/graph-renderer.js
+M	src/style.css
+
+commit 0e9a078d782aeb7c70bdb868e80a47c20e59a0da
+Author: halilbozoglu <bozogluhalil087@gmail.com>
+Date:   Thu Mar 19 04:07:49 2026 +0300
+
+    feat(interaction): Cift ebeveyn ekleme, hizli es ekleme, linking mode (iki kisiyi evlendirme) eklendi
+
+M	src/app.js
+M	src/graph-renderer.js
+M	src/style.css
+
+commit b073529e505c0041c09853d6363c8fc6e4262318
+Author: halilbozoglu <bozogluhalil087@gmail.com>
+Date:   Thu Mar 19 03:57:47 2026 +0300
+
+    feat(ui): Drag cizgi senkronizasyonu, Anne/Baba etiketleri, glassmorphism UI revizyonu
+
+M	index.html
+M	src/app.js
+M	src/graph-renderer.js
+M	src/style.css
+
+commit 87aac975e8f86ca78c757f3aceb49b3377de202f
+Author: halilbozoglu <bozogluhalil087@gmail.com>
+Date:   Thu Mar 19 03:37:02 2026 +0300
+
+    feat(ux): Smooth Zoom, Drag&Drop offset, Context Menu, Edit Mode eklendi
+
+M	index.html
+A	package-lock.json
+M	src/app.js
+M	src/graph-renderer.js
+
+commit a2bb88100f31b256898c7071b52f2938238b3f50
+Author: halilbozoglu <bozogluhalil087@gmail.com>
+Date:   Thu Mar 19 03:22:37 2026 +0300
+
+    fix(renderer): .nodes() -> .descendants() d3-dag v0.8.2 API uyumlulugu
+
+M	src/graph-renderer.js
+
+commit 471a63a48025f06864abdbf8b946996f1f3bba79
+Author: halilbozoglu <bozogluhalil087@gmail.com>
+Date:   Thu Mar 19 03:15:01 2026 +0300
+
+    fix(renderer): nodeSize failsafe eklendi - d3-dag internal dummy node coekmesi onlendi
+
+M	src/graph-renderer.js
+
+commit a3e5804a84534ddf7b0ff17b88e96c9264bf869a
+Author: halilbozoglu <bozogluhalil087@gmail.com>
+Date:   Thu Mar 19 03:05:01 2026 +0300
+
+    fix(renderer): DAG layout çökmesini önlemek için Dummy Root ve veri temizliği algoritması eklendi
+
+M	src/graph-renderer.js
+
+commit 6f71907f2f9c4a73a1a9729da532494e0bc58b0b
+Author: halilbozoglu <bozogluhalil087@gmail.com>
+Date:   Thu Mar 19 02:51:14 2026 +0300
+
+    feat: Sifirdan temiz mimari ve Vite konfigurasyonu
+
+A	.gitignore
+A	index.html
+A	package.json
+A	postcss.config.js
+A	src/app.js
+A	src/data-manager.js
+A	src/graph-renderer.js
+A	src/image-processor.js
+A	src/main.js
+A	src/style.css
+A	tailwind.config.js
+A	vite.config.js
