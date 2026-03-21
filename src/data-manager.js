@@ -317,4 +317,29 @@ export class DataManager {
             }
         });
     }
+
+    // Toplu Ebeveyn Atama (Bipartite İzolasyon Kuralı)
+    batchAssignParents(childIdsArray, targetUnionId) {
+        this.executeTransaction(() => {
+            // 1. Tüm çocukları mevcut evliliklerin childrenIds listesinden koparıyoruz (Bipartite kuralı: Aynı çocuk 2 ebeveyn bağı taşıyamaz)
+            this.data.unions.forEach(u => {
+                u.childrenIds = u.childrenIds.filter(cid => !childIdsArray.includes(cid));
+            });
+            
+            // 2. Hedef birliği bul ve çocukları ekle
+            const targetUnion = this.data.unions.find(u => u.id === targetUnionId);
+            if (targetUnion) {
+                const newChildren = new Set([...targetUnion.childrenIds, ...childIdsArray]);
+                targetUnion.childrenIds = Array.from(newChildren);
+            }
+            
+            // 3. Boş kalan (Eş ve Çocuksuz) Union'ları temizle (Garbage Collection)
+            this.data.unions = this.data.unions.filter(u => {
+                const totalMembers = u.partnerIds.length + u.childrenIds.length;
+                if (totalMembers === 0) return false;
+                if (u.partnerIds.length <= 1 && u.childrenIds.length === 0) return false;
+                return true;
+            });
+        });
+    }
 }

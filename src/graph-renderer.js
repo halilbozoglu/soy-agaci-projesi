@@ -101,14 +101,16 @@ export class GraphRenderer {
         this.svg.on("dblclick.zoom", null);
         this.svg.on("click", () => {
             this.hideContextMenu();
-            if (this.linkingState && this.linkingState !== 'MERGE_MODE') this.cancelLinkingMode();
-            if (this.linkingState === 'MERGE_MODE') { this.cancelLinkingMode(); return; }
+            if (this.linkingState && this.linkingState !== 'MERGE_MODE' && this.linkingState !== 'ASSIGN_PARENTS_MODE') this.cancelLinkingMode();
+            if (this.linkingState === 'MERGE_MODE' || this.linkingState === 'ASSIGN_PARENTS_MODE') { this.cancelLinkingMode(); return; }
             // Normal tıklama: çoklu seçimi temizle
             if (this.selectedNodeIds.size > 0) {
                 this.selectedNodeIds.clear();
+                const self = this;
                 this.g.selectAll(".node-type-person .card-bg").each(function(d) {
-                    d3.select(this).attr("stroke-width", 2);
+                    d3.select(this).attr("stroke", self._getCardStroke(d.data.data)).attr("stroke-width", 2);
                 });
+                if (this.callbacks.onSelectionChanged) this.callbacks.onSelectionChanged(this.selectedNodeIds);
             }
         });
 
@@ -118,38 +120,6 @@ export class GraphRenderer {
         });
         document.addEventListener('keyup', (e) => {
             if (e.key === 'Control') this._ctrlPressed = false;
-        });
-
-        // --- CTRL + DRAG: Kutulu Çoklu Seçim (Brush) ---
-        // Brush katmanı zoom-group'tan BAĞIMSIZ (SVG üzerinde doğrudan)
-        this._brushGroup = this.svg.append("g").attr("class", "brush-layer");
-        this._brush = d3.brush()
-            .extent([[0, 0], [8000, 8000]])
-            .on("start", () => { this.svg.on(".zoom", null); }) // Brush sırasında zoom devre dışı
-            .on("end", (event) => {
-                this._onBrushEnd(event);
-                this.svg.call(this.zoom); // Brush bittikten sonra zoom'u geri aç
-            });
-        this._brushGroup.call(this._brush);
-        // Varsayılan: brush overlay tıklanamaz (sadece CTRL basılıyken aktif)
-        this._brushGroup.select(".overlay").style("pointer-events", "none").style("cursor", "default");
-        this._brushGroup.select(".selection")
-            .style("fill", "rgba(99,102,241,0.15)")
-            .style("stroke", "#6366f1")
-            .style("stroke-width", "1.5")
-            .style("stroke-dasharray", "4 2");
-
-        // CTRL basılıyken brush overlay aktif, bırakınca deaktif
-        const self_init = this;
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Control') {
-                self_init._brushGroup.select(".overlay").style("pointer-events", "all").style("cursor", "crosshair");
-            }
-        });
-        document.addEventListener('keyup', (e) => {
-            if (e.key === 'Control') {
-                self_init._brushGroup.select(".overlay").style("pointer-events", "none").style("cursor", "default");
-            }
         });
 
         this._nodePositions = new Map();
@@ -204,32 +174,10 @@ export class GraphRenderer {
         this.g.selectAll(".node-type-person").classed("linking-candidate", true);
     }
 
-    // Brush bittiğinde seçim yap
-    _onBrushEnd(event) {
-        if (!event.selection) return;
-        const [[x0, y0], [x1, y1]] = event.selection;
-        this.selectedNodeIds.clear();
-
-        // SVG transform'u (zoom) hesaba kat
-        const transform = d3.zoomTransform(this.svg.node());
-        const self = this;
-
-        this.g.selectAll(".node-type-person").each(function(d) {
-            const pos = self._nodePositions.get(d.data.id);
-            if (!pos) return;
-            // Ekran koordinatına çevir
-            const sx = transform.applyX(pos.x);
-            const sy = transform.applyY(pos.y);
-            if (sx >= x0 && sx <= x1 && sy >= y0 && sy <= y1) {
-                self.selectedNodeIds.add(d.data.id);
-                d3.select(this).select(".card-bg").attr("stroke", "#eab308").attr("stroke-width", 3.5);
-            } else {
-                d3.select(this).select(".card-bg").attr("stroke-width", 2);
-            }
-        });
-
-        // Brush'u sıfırla (dikdörtgeni kaldır)
-        this._brushGroup.call(this._brush.move, null);
+    enterAssignParentsMode() {
+        this.linkingState = 'ASSIGN_PARENTS_MODE';
+        this.showToast(`👨‍👩‍👧 Lütfen çoklu atama için hedef Evlilik (Pembe) düğümüne tıklayın... (ESC ile iptal)`, 'linking');
+        this.svg.style("cursor", "crosshair");
     }
 
     hideContextMenu() {
@@ -584,6 +532,18 @@ export class GraphRenderer {
                 this.callbacks.toggleDivorced(d.data.data.id);
             }
         });
+        
+        unionGroups.on("click", (event, d) => {
+            event.stopPropagation();
+            if (self.linkingState === 'ASSIGN_PARENTS_MODE') {
+                const targetUnionId = d.data.data.id;
+                self.cancelLinkingMode();
+                if (self.callbacks.onBatchAssignParents) {
+                    self.callbacks.onBatchAssignParents(Array.from(self.selectedNodeIds), targetUnionId);
+                }
+                return;
+            }
+        });
 
         // Person düğümleri
         const personGroups = nodeGroup.filter(d => d.data.type === 'person');
@@ -603,7 +563,7 @@ export class GraphRenderer {
                 if (self.selectedNodeIds.has(d.data.id)) return '#eab308';
                 return self._getCardStroke(d.data.data);
             })
-            .attr("stroke-width", d => self.selectedNodeIds.has(d.data.id) ? 3.5 : 2)
+            .attr("stroke-width", d => self.selectedNodeIds.has(d.data.id) ? 4 : 2)
             .style("cursor", "pointer")
             .style("filter", "url(#card-shadow)");
 
@@ -701,6 +661,23 @@ export class GraphRenderer {
 
         // --- CLICK: Context Menu vs Linking Mode (İZOLE) ---
         personGroups.on("click", function(event, d) {
+            // Shift tuşu ile seçim modu
+            if (event.shiftKey) {
+                event.stopPropagation();
+                const id = d.data.data.id;
+                if (self.selectedNodeIds.has(id)) {
+                    self.selectedNodeIds.delete(id);
+                    d3.select(this).select(".card-bg").attr("stroke-width", 2).attr("stroke", self._getCardStroke(d.data.data)); // Revert highlight
+                } else {
+                    self.selectedNodeIds.add(id);
+                    d3.select(this).select(".card-bg").attr("stroke", "#eab308").attr("stroke-width", 4);
+                }
+                if (self.callbacks.onSelectionChanged) {
+                    self.callbacks.onSelectionChanged(self.selectedNodeIds);
+                }
+                return;
+            }
+
             event.stopPropagation();
 
             // MERGE_MODE: 2. kişi seçimi

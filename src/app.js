@@ -22,8 +22,26 @@ export class AppController {
             onLinkingComplete: (p1, p2, state, unionId) => this.onLinkingComplete(p1, p2, state, unionId),
             onEditParentsComplete: (child, parents) => this.onEditParentsComplete(child, parents),
             onMergeComplete: (source, target) => this.onMergeComplete(source, target),
+            onSelectionChanged: (selectedIds) => this.onSelectionChanged(selectedIds),
+            onBatchAssignParents: (childIds, unionId) => this.onBatchAssignParents(childIds, unionId),
             toggleDivorced: (unionId) => { this.dataManager.toggleDivorced(unionId); this.render(); }
         });
+    }
+
+    onSelectionChanged(selectedIds) {
+        const btnAssess = document.getElementById('btn-assign-parents');
+        if (btnAssess) {
+            btnAssess.disabled = selectedIds.size === 0;
+        }
+    }
+
+    onBatchAssignParents(childIds, targetUnionId) {
+        if (!childIds || childIds.length === 0) return;
+        this.dataManager.batchAssignParents(childIds, targetUnionId);
+        this.renderer.selectedNodeIds.clear(); // Seçimleri sıfırla
+        this.onSelectionChanged(this.renderer.selectedNodeIds); // Butonu pasifleştir
+        this.render();
+        this.renderer.showToast(`✅ Başarıyla ${childIds.length} kişiye ebeveyn atandı.`, 'success');
     }
 
     init() {
@@ -626,6 +644,14 @@ export class AppController {
             this.dataManager.resetAllOffsets();
             this.render();
         });
+
+        const btnAssign = document.getElementById('btn-assign-parents');
+        if (btnAssign) {
+            btnAssign.addEventListener('click', () => {
+                if (this.renderer.selectedNodeIds.size === 0) return;
+                this.renderer.enterAssignParentsMode();
+            });
+        }
 
         document.getElementById('btn-clear-yakinlik').addEventListener('click', () => {
             this.dataManager.clearAllYakinlik();
