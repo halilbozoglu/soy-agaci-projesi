@@ -24,6 +24,16 @@ export class AppController {
             onMergeComplete: (source, target) => this.onMergeComplete(source, target),
             onSelectionChanged: (selectedIds) => this.onSelectionChanged(selectedIds),
             onBatchAssignParents: (childIds, unionId) => this.onBatchAssignParents(childIds, unionId),
+            detachParents: (personData) => { 
+                this.dataManager.detachParents(personData.id); 
+                this.render(); 
+                this.renderer.showToast(`✂️ Ebeveyn bağları başarıyla koparıldı.`, 'success');
+            },
+            deleteUnion: (unionData) => { 
+                this.dataManager.deleteUnion(unionData.id); 
+                this.render(); 
+                this.renderer.showToast(`❌ Evlilik düğümü tamamen silindi.`, 'success');
+            },
             toggleDivorced: (unionId) => { this.dataManager.toggleDivorced(unionId); this.render(); }
         });
     }

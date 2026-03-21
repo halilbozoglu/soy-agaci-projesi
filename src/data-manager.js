@@ -342,4 +342,25 @@ export class DataManager {
             });
         });
     }
+
+    detachParents(childId) {
+        this.executeTransaction(() => {
+            this.data.unions.forEach(u => {
+                u.childrenIds = u.childrenIds.filter(cid => cid !== childId);
+            });
+            // Garbage collection
+            this.data.unions = this.data.unions.filter(u => {
+                const totalMembers = u.partnerIds.length + u.childrenIds.length;
+                if (totalMembers === 0) return false;
+                if (u.partnerIds.length <= 1 && u.childrenIds.length === 0) return false;
+                return true;
+            });
+        });
+    }
+
+    deleteUnion(unionId) {
+        this.executeTransaction(() => {
+            this.data.unions = this.data.unions.filter(u => u.id !== unionId);
+        });
+    }
 }

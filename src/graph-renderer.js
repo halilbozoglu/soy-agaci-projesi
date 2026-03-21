@@ -203,6 +203,7 @@ export class GraphRenderer {
             { icon: '🔗', label: 'Mevcut Kişiyi Çocuk Yap', action: 'startLinkChild' },
             { icon: '🔗', label: 'Mevcut Kişiyi Kardeş Yap', action: 'startLinkSibling' },
             { icon: '👨‍👩‍👦', label: 'Ebeveynleri Değiştir', action: 'startEditParents' },
+            { icon: '✂️', label: 'Ebeveyn Bağını Kopar', action: 'detachParents' },
             { icon: '🔗', label: 'Başkasıyla Birleştir', action: 'startMerge' },
             { sep: true },
             { icon: '🗑️', label: 'Sil', action: 'delete', danger: true }
@@ -245,7 +246,45 @@ export class GraphRenderer {
         let left = event.clientX - containerRect.left + 10;
         let top = event.clientY - containerRect.top + 10;
         if (left + 200 > containerRect.width) left = left - 210;
-        if (top + 350 > containerRect.height) top = top - 360;
+        if (top + 400 > containerRect.height) top = top - 410; // Adjusted for new item
+        menu.style.left = `${left}px`;
+        menu.style.top = `${top}px`;
+    }
+
+    showUnionContextMenu(event, unionData) {
+        this.hideContextMenu();
+
+        const menu = document.createElement('div');
+        menu.id = 'node-context-menu';
+        menu.className = 'ctx-menu';
+        
+        const items = [
+            { icon: '❌', label: 'Evliliği Sil', action: 'deleteUnion', danger: true }
+        ];
+
+        items.forEach(item => {
+            const btn = document.createElement('button');
+            btn.className = `ctx-menu-item ${item.danger ? 'ctx-menu-danger' : ''}`;
+            btn.innerHTML = `<span>${item.icon}</span><span>${item.label}</span>`;
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.hideContextMenu();
+                if (this.callbacks[item.action]) {
+                    if (this.callbacks._setLastEvent) this.callbacks._setLastEvent(event);
+                    this.callbacks[item.action](unionData, event);
+                }
+            });
+            menu.appendChild(btn);
+        });
+
+        const container = document.getElementById(this.containerId);
+        container.appendChild(menu);
+
+        const containerRect = container.getBoundingClientRect();
+        let left = event.clientX - containerRect.left + 10;
+        let top = event.clientY - containerRect.top + 10;
+        if (left + 200 > containerRect.width) left = left - 210;
+        if (top + 100 > containerRect.height) top = top - 110;
         menu.style.left = `${left}px`;
         menu.style.top = `${top}px`;
     }
@@ -389,6 +428,7 @@ export class GraphRenderer {
         // POST-PROCESSING: Eş Y Hizalama + X Kümeleme
         // ================================================
         const allDescendants = dagInfo.descendants();
+        this._dagDescendants = allDescendants; // Drag döngüsü için referans kopyası
         const nodeById = new Map();
         allDescendants.forEach(d => { nodeById.set(d.data.id, d); });
 
@@ -539,6 +579,13 @@ export class GraphRenderer {
             }
         });
         
+        const self = this; // Capture 'this' for use in event handlers
+        unionGroups.on("contextmenu", (event, d) => {
+            event.preventDefault();
+            event.stopPropagation();
+            self.showUnionContextMenu(event, d.data.data);
+        });
+
         unionGroups.on("click", (event, d) => {
             event.stopPropagation();
             if (self.linkingState === 'ASSIGN_PARENTS_MODE') {
@@ -549,13 +596,14 @@ export class GraphRenderer {
                 }
                 return;
             }
+            // Sadece tıklama ile de menü açılsın
+            self.showUnionContextMenu(event, d.data.data);
         });
 
         // Person düğümleri
         const personGroups = nodeGroup.filter(d => d.data.type === 'person');
         const cardWidth = 170;
         const cardHeight = 90;
-        const self = this;
 
         personGroups.append("rect")
             .attr("class", "card-bg")
@@ -771,48 +819,35 @@ export class GraphRenderer {
                 d3.select(this).raise().classed("dragging", true);
             })
             .on("drag", function(event, d) {
-                const draggedId = d.data.id;
-                // 1. Hareket Grubu Belirleme (Toplu veya Tekil)
-                const idsToMove = self.selectedNodeIds.has(draggedId) 
-                    ? Array.from(self.selectedNodeIds) 
-                    : [draggedId];
-
-                // 2. Veri Güncellemesi ve Eşzamanlı DOM Güncellemesi (Nodes)
-                idsToMove.forEach(id => {
-                    const nodeSelection = d3.select("#node-" + id);
-                    if (!nodeSelection.empty()) {
-                        const n = nodeSelection.datum(); // D3 Datum'u bul
+                const dx = event.dx;
+                const dy = event.dy;
+                // Sürüklenen düğüm seçili ise tüm seti, değilse sadece kendini al
+                const nodesToMove = self.selectedNodeIds.has(d.data.id) ? Array.from(self.selectedNodeIds) : [d.data.id];
+                
+                nodesToMove.forEach(nodeId => {
+                    // D3'ün hiyerarşik veri ağacından (dag) ilgili düğümü bul
+                    const targetNode = self._dagDescendants.find(n => n.data.id === nodeId);
+                    if (targetNode) {
+                        targetNode.x += dx;
+                        targetNode.y += dy;
+                        // DOM'u doğrudan ID ile bul ve anında kaydır
+                        d3.select("#node-" + nodeId).attr("transform", `translate(${targetNode.x},${targetNode.y})`);
                         
-                        // Veri Objelerine (Datum) dx, dy DOĞRUDAN EKLENİR
-                        n.x += event.dx;
-                        n.y += event.dy;
-                        
-                        // Uygulama global pos sistemimizi de senkronize edelim
-                        const pos = self._nodePositions.get(id);
-                        if (pos) { pos.x = n.x; pos.y = n.y; }
-                        
-                        // HEMEN ARDINDAN DOM'u güncelle
-                        nodeSelection.attr("transform", `translate(${n.x},${n.y})`);
+                        // Storage tracking (offset hesabı ve data-manager kaydı)
+                        const pos = self._nodePositions.get(nodeId);
+                        if (pos) { pos.x = targetNode.x; pos.y = targetNode.y; }
                     }
                 });
 
-                // 3. Eşzamanlı Çizgi (Links/Paths) Güncellemesi
-                self.g.selectAll(".dag-link")
-                    .attr("d", linkD => {
-                        // Yeni x ve y koordinatlarını doğrudan DOM datum'undan al
-                        const srcNodeSel = d3.select("#node-" + linkD.source.data.id);
-                        const tgtNodeSel = d3.select("#node-" + linkD.target.data.id);
-                        
-                        if (!srcNodeSel.empty() && !tgtNodeSel.empty()) {
-                            return self._bezierPath(srcNodeSel.datum(), tgtNodeSel.datum());
-                        }
-                        
-                        // Fallback yörünge (d3-dag points nesnesi varsa)
-                        if (linkD.points && linkD.points.length >= 2) {
-                            return self._bezierPath(linkD.points[0], linkD.points[linkD.points.length - 1]);
-                        }
-                        return '';
-                    });
+                // ÖNEMLİ: ÇİZGİLERİN EŞZAMANLI YENİDEN ÇİZİMİ
+                // Bu adım node döngüsünün tamamen bittiği yerde çağırılır (drag tick'in en sonu).
+                self.g.selectAll(".dag-link").attr("d", linkD => {
+                    const srcNode = self._dagDescendants.find(n => n.data.id === linkD.source.data.id);
+                    const tgtNode = self._dagDescendants.find(n => n.data.id === linkD.target.data.id);
+                    if (srcNode && tgtNode) return self._bezierPath(srcNode, tgtNode);
+                    if (linkD.points && linkD.points.length >= 2) return self._bezierPath(linkD.points[0], linkD.points[linkD.points.length - 1]);
+                    return '';
+                });
             })
             .on("end", function(event, d) {
                 d3.select(this).classed("dragging", false);
