@@ -498,11 +498,17 @@ export class GraphRenderer {
             .enter()
             .filter(d => d.data.id !== DUMMY_ROOT_ID)
             .append("g")
+            .attr("id", d => "node-" + d.data.id)
             .attr("class", d => `node-group node-type-${d.data.type}`)
             .attr("data-node-id", d => d.data.id)
             .attr("transform", d => {
                 const pos = this._nodePositions.get(d.data.id);
-                return pos ? `translate(${pos.x},${pos.y})` : `translate(${d.x},${d.y})`;
+                // Pos yoksay, fallback kendi x/y
+                if (!pos) return `translate(${d.x},${d.y})`;
+                // Render sırasında d.x ve d.y degerlerini de pos'a sabitleyelim ki Drag anında datumları bozuk yakalamayalım
+                d.x = pos.x;
+                d.y = pos.y;
+                return `translate(${pos.x},${pos.y})`;
             });
 
         // Union düğümleri (sürüklenebilir)
@@ -766,34 +772,42 @@ export class GraphRenderer {
             })
             .on("drag", function(event, d) {
                 const draggedId = d.data.id;
-                
-                // 1. Hareket Grubu Belirleme
+                // 1. Hareket Grubu Belirleme (Toplu veya Tekil)
                 const idsToMove = self.selectedNodeIds.has(draggedId) 
                     ? Array.from(self.selectedNodeIds) 
                     : [draggedId];
 
-                // 2. Veri ve 3. DOM Güncellemesi
-                idsToMove.forEach(nodeId => {
-                    const pos = self._nodePositions.get(nodeId);
-                    if (!pos) return;
-                    
-                    // .x ve .y değerlerine dx, dy DOĞRUDAN EKLENİR
-                    pos.x += event.dx;
-                    pos.y += event.dy;
-                    
-                    // SVG <g> elementini DOM'dan ID ile seç (data-node-id kullanarak) ve transform'u anında güncelle
-                    self.g.select(`[data-node-id="${nodeId}"]`)
-                        .attr("transform", `translate(${pos.x},${pos.y})`);
+                // 2. Veri Güncellemesi ve Eşzamanlı DOM Güncellemesi (Nodes)
+                idsToMove.forEach(id => {
+                    const nodeSelection = d3.select("#node-" + id);
+                    if (!nodeSelection.empty()) {
+                        const n = nodeSelection.datum(); // D3 Datum'u bul
+                        
+                        // Veri Objelerine (Datum) dx, dy DOĞRUDAN EKLENİR
+                        n.x += event.dx;
+                        n.y += event.dy;
+                        
+                        // Uygulama global pos sistemimizi de senkronize edelim
+                        const pos = self._nodePositions.get(id);
+                        if (pos) { pos.x = n.x; pos.y = n.y; }
+                        
+                        // HEMEN ARDINDAN DOM'u güncelle
+                        nodeSelection.attr("transform", `translate(${n.x},${n.y})`);
+                    }
                 });
 
-                // 4. Eşzamanlı Çizgi (Links/Paths) Güncellemesi
-                self.g.selectAll("path.dag-link")
+                // 3. Eşzamanlı Çizgi (Links/Paths) Güncellemesi
+                self.g.selectAll(".dag-link")
                     .attr("d", linkD => {
-                        const srcPos = self._nodePositions.get(linkD.source.data.id);
-                        const tgtPos = self._nodePositions.get(linkD.target.data.id);
-                        if (srcPos && tgtPos) return self._bezierPath(srcPos, tgtPos);
+                        // Yeni x ve y koordinatlarını doğrudan DOM datum'undan al
+                        const srcNodeSel = d3.select("#node-" + linkD.source.data.id);
+                        const tgtNodeSel = d3.select("#node-" + linkD.target.data.id);
                         
-                        // Fallback yörünge (grafiğin d3-dag points nesnesi varsa)
+                        if (!srcNodeSel.empty() && !tgtNodeSel.empty()) {
+                            return self._bezierPath(srcNodeSel.datum(), tgtNodeSel.datum());
+                        }
+                        
+                        // Fallback yörünge (d3-dag points nesnesi varsa)
                         if (linkD.points && linkD.points.length >= 2) {
                             return self._bezierPath(linkD.points[0], linkD.points[linkD.points.length - 1]);
                         }
