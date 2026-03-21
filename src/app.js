@@ -206,7 +206,8 @@ export class AppController {
                     <option value="Belirtilmemiş" ${(!defaults.cinsiyet || defaults.cinsiyet === 'Belirtilmemiş') ? 'selected' : ''}>Belirtilmemiş</option>
                 </select>
                 <input type="text" id="pop-tarih" placeholder="Doğum Tarihi" class="form-input" value="${defaults.dogumTarihi || ''}" />
-                ${options.editMode ? `<label class="flex items-center gap-2 text-xs text-slate-300 mt-1 cursor-pointer"><input type="checkbox" id="pop-deceased" ${defaults.isDeceased ? 'checked' : ''} class="rounded"/> 🖤 Vefat Etti</label>` : ''}
+                <label class="flex items-center gap-2 text-xs text-slate-300 mt-1 cursor-pointer"><input type="checkbox" id="pop-deceased" ${defaults.isDeceased ? 'checked' : ''} class="rounded"/> 🖤 Vefat Etti</label>
+                <input type="text" id="pop-olum-tarihi" placeholder="Ölüm Tarihi" class="form-input" value="${defaults.olumTarihi || ''}" style="${defaults.isDeceased ? 'display:block; margin-top:8px;' : 'display:none; margin-top:8px;'}" />
             `;
         }
 
@@ -237,9 +238,19 @@ export class AppController {
         popover.style.top = `${top}px`;
 
         const closePopover = () => this.destroyPopover();
-        popover.querySelector('#popover-close-btn').addEventListener('click', (e) => { e.stopPropagation(); closePopover(); });
-        popover.querySelector('#popover-cancel-btn').addEventListener('click', (e) => { e.stopPropagation(); closePopover(); });
+        const closeBtn = popover.querySelector('#popover-close-btn');
+        if (closeBtn) closeBtn.addEventListener('click', (e) => { e.stopPropagation(); closePopover(); });
+        const cancelBtn = popover.querySelector('#popover-cancel-btn');
+        if (cancelBtn) cancelBtn.addEventListener('click', (e) => { e.stopPropagation(); closePopover(); });
         popover.addEventListener('click', (e) => e.stopPropagation());
+
+        const deceasedEl = popover.querySelector('#pop-deceased');
+        const olumEl = popover.querySelector('#pop-olum-tarihi');
+        if (deceasedEl && olumEl) {
+            deceasedEl.addEventListener('change', (e) => {
+                olumEl.style.display = e.target.checked ? 'block' : 'none';
+            });
+        }
 
         popover.querySelector('#popover-form').addEventListener('submit', (e) => {
             e.preventDefault();
@@ -257,9 +268,11 @@ export class AppController {
             const tarihEl = popover.querySelector('#pop-tarih');
             if (tarihEl) formData.dogumTarihi = tarihEl.value;
             const yakinlikEl = popover.querySelector('#pop-yakinlik');
-            if (yakinlikEl) formData.yakinlikDerecesi = yakinlikEl.value;
-            const deceasedEl = popover.querySelector('#pop-deceased');
-            if (deceasedEl) formData.isDeceased = deceasedEl.checked;
+            if (yakinlikEl && !options.unionSelectOnly) formData.yakinlikDerecesi = yakinlikEl.value;
+            const deceasedElCheck = popover.querySelector('#pop-deceased');
+            if (deceasedElCheck && !options.unionSelectOnly) formData.isDeceased = deceasedElCheck.checked;
+            const olumElCheck = popover.querySelector('#pop-olum-tarihi');
+            if (olumElCheck && formData.isDeceased && !options.unionSelectOnly) formData.olumTarihi = olumElCheck.value;
             const unionEl = popover.querySelector('#pop-union-select');
             if (unionEl) formData.selectedUnionId = unionEl.value;
             closePopover();
@@ -282,6 +295,7 @@ export class AppController {
                 soyad: this._toTitleCase(formData.soyad),
                 cinsiyet: formData.cinsiyet,
                 dogumTarihi: formData.dogumTarihi,
+                olumTarihi: formData.olumTarihi || '',
                 yakinlikDerecesi: formData.yakinlikDerecesi,
                 isDeceased: formData.isDeceased || false
             };
@@ -292,6 +306,7 @@ export class AppController {
             soyad: person.soyad,
             cinsiyet: person.cinsiyet,
             dogumTarihi: person.dogumTarihi,
+            olumTarihi: person.olumTarihi,
             yakinlikDerecesi: person.yakinlikDerecesi,
             isDeceased: person.isDeceased
         }, { editMode: true });
@@ -335,8 +350,8 @@ export class AppController {
                 const id = this._generateId();
                 this.dataManager.data.persons.push({
                     id, ad: babaData.ad, soyad: babaData.soyad || '',
-                    cinsiyet: 'Erkek', dogumTarihi: babaData.dogumTarihi || '',
-                    yakinlikDerecesi: '', fotograf: null, offsetX: 0, offsetY: 0
+                    cinsiyet: 'Erkek', dogumTarihi: babaData.dogumTarihi || '', olumTarihi: babaData.olumTarihi || '',
+                    yakinlikDerecesi: babaData.yakinlikDerecesi || '', fotograf: null, offsetX: 0, offsetY: 0, isDeceased: babaData.isDeceased || false
                 });
                 newPartnerIds.push(id);
             }
@@ -344,8 +359,8 @@ export class AppController {
                 const id = this._generateId() + 'a';
                 this.dataManager.data.persons.push({
                     id, ad: anneData.ad, soyad: anneData.soyad || '',
-                    cinsiyet: 'Kadın', dogumTarihi: anneData.dogumTarihi || '',
-                    yakinlikDerecesi: '', fotograf: null, offsetX: 0, offsetY: 0
+                    cinsiyet: 'Kadın', dogumTarihi: anneData.dogumTarihi || '', olumTarihi: anneData.olumTarihi || '',
+                    yakinlikDerecesi: anneData.yakinlikDerecesi || '', fotograf: null, offsetX: 0, offsetY: 0, isDeceased: anneData.isDeceased || false
                 });
                 newPartnerIds.push(id);
             }
@@ -384,9 +399,9 @@ export class AppController {
                 const id = this._generateId();
                 this.dataManager.data.persons.push({
                     id, ad: this._toTitleCase(formData.ad), soyad: this._toTitleCase(formData.soyad || ''),
-                    cinsiyet: formData.cinsiyet, dogumTarihi: formData.dogumTarihi || '',
-                    yakinlikDerecesi: '', fotograf: null, offsetX: 0, offsetY: 0,
-                    isDeceased: false
+                    cinsiyet: formData.cinsiyet, dogumTarihi: formData.dogumTarihi || '', olumTarihi: formData.olumTarihi || '',
+                    yakinlikDerecesi: formData.yakinlikDerecesi || '', fotograf: null, offsetX: 0, offsetY: 0,
+                    isDeceased: formData.isDeceased || false
                 });
                 this.dataManager.data.unions.push({
                     id: this._generateId(),
@@ -563,6 +578,8 @@ export class AppController {
                     soyad: this._toTitleCase(document.getElementById('p-soyad').value),
                     cinsiyet: document.getElementById('p-cinsiyet').value,
                     dogumTarihi: document.getElementById('p-tarih').value,
+                    olumTarihi: document.getElementById('p-olum-tarihi') ? document.getElementById('p-olum-tarihi').value : '',
+                    isDeceased: document.getElementById('p-deceased') ? document.getElementById('p-deceased').checked : false,
                     yakinlikDerecesi: document.getElementById('p-yakinlik').value,
                     fotograf: this.currentBase64Image
                 };
@@ -576,6 +593,8 @@ export class AppController {
                     soyad: this._toTitleCase(document.getElementById('p-soyad').value),
                     cinsiyet: document.getElementById('p-cinsiyet').value,
                     dogumTarihi: document.getElementById('p-tarih').value,
+                    olumTarihi: document.getElementById('p-olum-tarihi') ? document.getElementById('p-olum-tarihi').value : '',
+                    isDeceased: document.getElementById('p-deceased') ? document.getElementById('p-deceased').checked : false,
                     yakinlikDerecesi: document.getElementById('p-yakinlik').value,
                     fotograf: this.currentBase64Image,
                     offsetX: 0, offsetY: 0
@@ -613,6 +632,15 @@ export class AppController {
             this.render();
             this.renderer.showToast('🧹 Tüm yakınlık dereceleri temizlendi.', 'success');
         });
+
+        // Side panel Vefat Etti checkbox toggle dinleyicisi
+        const pDeceased = document.getElementById('p-deceased');
+        const pOlumTarihi = document.getElementById('p-olum-tarihi');
+        if (pDeceased && pOlumTarihi) {
+            pDeceased.addEventListener('change', (e) => {
+                pOlumTarihi.style.display = e.target.checked ? 'block' : 'none';
+            });
+        }
 
         // ============================================================
         // DIŞA AKTARIM (EXPORT) VE İÇE AKTARIM (IMPORT)

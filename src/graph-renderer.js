@@ -341,6 +341,25 @@ export class GraphRenderer {
         return '#cbd5e1'; // Acik slate
     }
 
+    calculateAge(dogum, olum, isDeceased) {
+        if (!dogum) return "";
+        const matchDogum = String(dogum).match(/\d{4}/);
+        if (!matchDogum) return "";
+        const yilDogum = parseInt(matchDogum[0], 10);
+        
+        if (isDeceased) {
+            if (!olum) return "";
+            const matchOlum = String(olum).match(/\d{4}/);
+            if (!matchOlum) return "";
+            const yilOlum = parseInt(matchOlum[0], 10);
+            const yas = yilOlum - yilDogum;
+            return `Vefat: ${yas} Yaşında`;
+        } else {
+            const yas = 2026 - yilDogum;
+            return `Yaş: ${yas}`;
+        }
+    }
+
     render(dataManager) {
         this.g.selectAll("*").remove();
         this._nodePositions.clear();
@@ -402,11 +421,11 @@ export class GraphRenderer {
             const layout = d3dag.sugiyama()
                 .nodeSize(n => {
                     if (!n || !n.data) return [0, 0];
-                    // Union: Devasa blok olarak (Kapsayıcı) = 650px (dikey 300px yayılım)
-                    if (n.data.type === 'union') return [650, 300];
-                    if (n.data.type === 'dummy') return [50, 300];
-                    // Person: Dar yatay, geniş dikey
-                    return [250, 300];
+                    // Union: Daha dar blok (Kompakt çapraz)
+                    if (n.data.type === 'union') return [240, 250];
+                    if (n.data.type === 'dummy') return [50, 250];
+                    // Person: Dar yatay (Kompakt)
+                    return [180, 250];
                 })
                 .layering(d3dag.layeringLongestPath())
                 .decross(d3dag.decrossTwoLayer())
@@ -439,9 +458,8 @@ export class GraphRenderer {
             uNode.y = maxY;
         });
 
-        // 2b. X Kümeleme: Eşleri Union merkezinin ±140px'ine sabitle
-        // Union 650px tahsis edildi -> eşler (280px toplam) kesinlikle sınır içinde kalır.
-        const SPOUSE_HALF_GAP = 140;
+        // 2b. X Kümeleme: Eşleri Union merkezinin ±90px'ine sabitle
+        const SPOUSE_HALF_GAP = 90;
         data.unions.forEach(u => {
             const uNode = nodeById.get(`u_${u.id}`);
             if (!uNode) return;
@@ -463,8 +481,9 @@ export class GraphRenderer {
                 .filter(Boolean);
             if (childNodes.length < 2) return;
             childNodes.forEach((child, idx) => {
-                // Çift indeksli çocuklar normal Y, tek indeksli çocuklar +80px aşağıda
-                child.y = uNode.y + 150 + (idx % 2 === 0 ? 0 : 80);
+                // Çift indeksli çocuklar normal Y, tek indeksli çocuklar +90px aşağıda
+                child.y = uNode.y + 150;
+                child.y += (idx % 2 !== 0) ? 90 : 0;
             });
         });
 
@@ -624,19 +643,30 @@ export class GraphRenderer {
             .attr("font-family", "'Inter', 'Segoe UI', sans-serif")
             .text(d => `${d.data.data.ad} ${d.data.data.soyad}`);
             
-        personGroups.append("text")
-            .attr("x", nameXOffset).attr("y", 12)
-            .attr("text-anchor", alignOpts).attr("fill", "#6366f1")
-            .attr("font-size", "11px").attr("font-weight", "500")
-            .attr("font-family", "'Inter', 'Segoe UI', sans-serif")
-            .text(d => d.data.data.yakinlikDerecesi || "");
+        personGroups.each(function(d) {
+            const g = d3.select(this);
+            const nx = nameXOffset(d);
+            const aOpts = alignOpts(d);
+            let currentY = 12;
 
-        personGroups.append("text")
-            .attr("x", nameXOffset).attr("y", 26)
-            .attr("text-anchor", alignOpts).attr("fill", "#94a3b8")
-            .attr("font-size", "10px")
-            .attr("font-family", "'Inter', 'Segoe UI', sans-serif")
-            .text(d => d.data.data.dogumTarihi || "");
+            if (d.data.data.yakinlikDerecesi) {
+                g.append("text")
+                    .attr("x", nx).attr("y", currentY)
+                    .attr("text-anchor", aOpts).attr("fill", "#cbd5e1")
+                    .attr("font-size", "10px")
+                    .attr("font-style", "italic")
+                    .attr("font-family", "'Inter', 'Segoe UI', sans-serif")
+                    .text(d.data.data.yakinlikDerecesi);
+                currentY += 14;
+            }
+
+            g.append("text")
+                .attr("x", nx).attr("y", currentY)
+                .attr("text-anchor", aOpts).attr("fill", "#94a3b8")
+                .attr("font-size", "10px")
+                .attr("font-family", "'Inter', 'Segoe UI', sans-serif")
+                .text(self.calculateAge(d.data.data.dogumTarihi, d.data.data.olumTarihi, d.data.data.isDeceased) || (d.data.data.dogumTarihi || ""));
+        });
 
         // --- HOVER: Bağlı çizgiler parlasın + Linking mode glow ---
         personGroups.on("mouseenter", function(event, d) {
